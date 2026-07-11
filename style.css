@@ -163,6 +163,9 @@ input[type="number"] {
   font-weight: 600;
   padding: 0;
   height: min(15vw, 66px);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .keypad button:active { background: var(--surface2); }
 .keypad .key-dim { color: var(--text-dim); font-size: 20px; }

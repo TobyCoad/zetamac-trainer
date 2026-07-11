@@ -60,6 +60,7 @@
     body.innerHTML =
       overviewCards(ss, qs) +
       progressSection(ss) +
+      highScoreSection(ss) +
       opSpeedSection(ss, qs) +
       mulHeatmapSection(qs) +
       addSubSection(qs) +
@@ -121,6 +122,49 @@
       <div class="chart-wrap">${svg}</div>
       <div class="legend"><span><i style="background:#5b8cff"></i>per session</span><span><i style="background:#34d0a6"></i>5-session average</span></div>
       <div class="note">Pace normalises across durations and modes (a 40-score 120s sprint = 20/min = on track for 80-in-8 at 10/min).</div>
+    </div>`;
+  }
+
+  /* ---- high score over time ----
+   * Scores only compare within one (mode, duration) group, so plot the
+   * group with the most sessions under the current filter. Partial
+   * (end-&-save) sessions store their real played duration and therefore
+   * drop out of the standard-duration groups automatically. */
+  function highScoreSection(ss) {
+    let group, label;
+    if (filters.mode === 'eighty') {
+      group = ss.filter(s => s.mode === 'eighty');
+      label = '80 in 8 — questions answered';
+    } else {
+      const cands = ss.filter(s =>
+        filters.mode === 'all' ? s.mode !== 'eighty' : s.mode === filters.mode);
+      const counts = new Map();
+      for (const s of cands) {
+        const k = `${s.mode}|${s.dur}`;
+        counts.set(k, (counts.get(k) || 0) + 1);
+      }
+      const bestKey = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (!bestKey) return '';
+      const [m, d] = bestKey[0].split('|');
+      group = cands.filter(s => s.mode === m && s.dur === Number(d));
+      label = `${m === 'target' ? 'targeted ' : ''}${d}s sprint`;
+    }
+    if (group.length < 2) return '';
+
+    const pts = group.map((s, i) => [i, s.score]);
+    let hi = -Infinity;
+    const best = group.map((s, i) => { hi = Math.max(hi, s.score); return [i, hi]; });
+    const svg = Charts.lineChart(
+      [
+        { pts, color: '#5b8cff' },
+        { pts: best, color: '#34d0a6', dashed: true },
+      ],
+      { yMin: 0, xLabelFn: x => fmtDate(group[Math.round(x)] ? group[Math.round(x)].ts : group[group.length - 1].ts), yFmt: v => v.toFixed(0) }
+    );
+    return `<div class="stat-section"><h3>High score — ${esc(label)}</h3>
+      <div class="chart-wrap">${svg}</div>
+      <div class="legend"><span><i style="background:#5b8cff"></i>score per session</span><span><i style="background:#34d0a6"></i>running high score</span></div>
+      <div class="note">Shows your most-played mode/duration under the current filter (${group.length} sessions) — scores across different durations aren't comparable.</div>
     </div>`;
   }
 

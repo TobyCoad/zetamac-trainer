@@ -106,20 +106,13 @@
       Game.quit();
     });
 
-    // keypad: touchstart for zero-delay response on iOS, click fallback for desktop
-    const keypad = el('keypad');
-    let touched = false;
-    keypad.addEventListener('touchstart', e => {
+    // keypad: pointerdown fires the moment a finger/cursor lands — no
+    // synthetic click, no touch/click double-handling
+    el('keypad').addEventListener('pointerdown', e => {
       const b = e.target.closest('button');
       if (!b) return;
       e.preventDefault();
-      touched = true;
       Game.key(b.dataset.k);
-    }, { passive: false });
-    keypad.addEventListener('click', e => {
-      if (touched) { touched = false; return; }
-      const b = e.target.closest('button');
-      if (b) Game.key(b.dataset.k);
     });
 
     // hardware keyboard (desktop practice)
