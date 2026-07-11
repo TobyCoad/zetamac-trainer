@@ -168,7 +168,8 @@
     el('question').textContent = `${q.x} ${OP_SYM[q.op]} ${q.y} =`;
     const box = el('answer-box');
     box.textContent = state.input || ' ';
-    box.classList.toggle('wrong', state.wasWrong && state.input.length > 0);
+    // no wrong-input styling: the box gives zero feedback on whether the
+    // digits typed so far are correct (wasWrong is still tracked for stats)
   }
 
   function key(k) {

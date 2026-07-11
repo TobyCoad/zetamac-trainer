@@ -147,7 +147,6 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
   min-height: 56px;
 }
-.answer-box.wrong { border-bottom-color: var(--red); color: var(--red); }
 
 .keypad {
   display: grid;
