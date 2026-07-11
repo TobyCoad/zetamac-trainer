@@ -72,6 +72,8 @@ input[type="number"] {
 }
 .mode-card:active { transform: scale(0.97); }
 .mode-card.accent { border-color: var(--accent); background: linear-gradient(160deg, #1b2438, var(--surface)); }
+.mode-card.full { width: 100%; margin-bottom: 18px; border-color: #3d3350; background: linear-gradient(160deg, #251d33, var(--surface)); }
+.mode-card.full.disabled { opacity: 0.55; }
 .mode-title { font-size: 19px; font-weight: 700; }
 .mode-desc { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
 .mode-best { font-size: 12px; color: var(--accent2); font-weight: 600; min-height: 15px; }
@@ -164,6 +166,32 @@ input[type="number"] {
 }
 .keypad button:active { background: var(--surface2); }
 .keypad .key-dim { color: var(--text-dim); font-size: 20px; }
+
+.quit-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(8, 10, 15, 0.78);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+.quit-overlay[hidden] { display: none; }
+.quit-sheet {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 22px 20px;
+  width: min(320px, 86vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+.quit-sheet h3 { font-size: 16px; color: var(--text-dim); margin-bottom: 4px; }
+.danger-text { color: var(--red); }
 
 /* ---------- Results ---------- */
 .results-inner { text-align: center; padding-top: 8vh; }
@@ -284,6 +312,14 @@ input[type="number"] {
 .sess-table td { padding: 7px 6px; border-top: 1px solid var(--border); }
 .sess-table .mode-tag { font-size: 10px; padding: 2px 6px; border-radius: 5px; background: var(--surface2); color: var(--text-dim); }
 .sess-table .mode-tag.eighty { background: #1b3330; color: var(--accent2); }
+.sess-table .mode-tag.target { background: #2b2138; color: #c9a7ff; }
+.sess-del {
+  color: var(--text-dim);
+  font-size: 15px;
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.sess-del:active { color: var(--red); }
 
 .data-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 .data-buttons button {

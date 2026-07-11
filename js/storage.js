@@ -76,13 +76,17 @@
     return added;
   }
 
+  function deleteSession(id) {
+    saveSessions(loadSessions().filter(s => s.id !== id));
+  }
+
   function resetAll() {
     localStorage.removeItem(KEY_SESSIONS);
   }
 
   window.Store = {
     DEFAULT_SETTINGS,
-    loadSessions, addSession,
+    loadSessions, addSession, deleteSession,
     loadSettings, saveSettings,
     exportData, importData, resetAll,
   };

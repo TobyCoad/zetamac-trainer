@@ -24,6 +24,12 @@
     el('eighty-best').textContent = done.length
       ? `best ${(Math.min(...done.map(s => s.hitTargetMs)) / 60000).toFixed(1)} min ✓`
       : tried.length ? `best ${Math.max(...tried.map(s => s.score))}/80` : '';
+
+    const model = Analytics.buildTargetModel();
+    el('btn-start-target').classList.toggle('disabled', !model);
+    el('target-best').textContent = model
+      ? `${model.archetypes.length} archetypes · ${model.replays.length} replays queued`
+      : `needs ~40 answered questions (${ss.reduce((a, s) => a + s.qs.length, 0)} so far)`;
   }
 
   /* ---- settings UI ---- */
@@ -80,7 +86,25 @@
   function wireGame() {
     el('btn-start-sprint').addEventListener('click', () => Game.start('sprint', settings));
     el('btn-start-eighty').addEventListener('click', () => Game.start('eighty', settings));
-    el('btn-quit').addEventListener('click', () => Game.quit());
+    el('btn-start-target').addEventListener('click', () => startTarget());
+
+    // quit button = pause menu (resume / save / discard), never an instant kill
+    el('btn-quit').addEventListener('click', () => {
+      Game.pause();
+      el('quit-overlay').hidden = false;
+    });
+    el('btn-resume').addEventListener('click', () => {
+      el('quit-overlay').hidden = true;
+      Game.resume();
+    });
+    el('btn-save-quit').addEventListener('click', () => {
+      el('quit-overlay').hidden = true;
+      Game.finishEarly();
+    });
+    el('btn-discard').addEventListener('click', () => {
+      el('quit-overlay').hidden = true;
+      Game.quit();
+    });
 
     // keypad: touchstart for zero-delay response on iOS, click fallback for desktop
     const keypad = el('keypad');
@@ -103,15 +127,25 @@
       if (!el('screen-game').classList.contains('active')) return;
       if (e.key >= '0' && e.key <= '9') Game.key(e.key);
       else if (e.key === 'Backspace') Game.key('B');
-      else if (e.key === 'Escape') Game.quit();
+      else if (e.key === 'Escape') { Game.pause(); el('quit-overlay').hidden = false; }
     });
 
     el('btn-again').addEventListener('click', () => {
       const last = Store.loadSessions().slice(-1)[0];
-      Game.start(last && last.mode === 'eighty' ? 'eighty' : 'sprint', settings);
+      if (last && last.mode === 'target') startTarget();
+      else Game.start(last && last.mode === 'eighty' ? 'eighty' : 'sprint', settings);
     });
     el('btn-results-stats').addEventListener('click', () => showScreen('stats'));
     el('btn-results-home').addEventListener('click', () => showScreen('home'));
+  }
+
+  function startTarget() {
+    const model = Analytics.buildTargetModel();
+    if (!model) {
+      alert('Targeted practice needs ~40 answered questions of history first — play a sprint or two.');
+      return;
+    }
+    Game.start('target', settings, model);
   }
 
   /* ---- stats filters + tabs ---- */

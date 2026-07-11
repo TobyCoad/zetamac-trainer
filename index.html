@@ -36,6 +36,12 @@
       </button>
     </section>
 
+    <button class="mode-card full" id="btn-start-target">
+      <span class="mode-title">Targeted practice</span>
+      <span class="mode-desc" id="target-desc">drills the questions your analytics say you're slowest on &mdash; weak archetypes + replays of ones you fumbled</span>
+      <span class="mode-best" id="target-best"></span>
+    </button>
+
     <section class="settings-panel">
       <h2>Sprint settings</h2>
       <div class="setting-row">
@@ -95,6 +101,14 @@
       <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
       <button data-k="C" class="key-dim">C</button><button data-k="0">0</button><button data-k="B" class="key-dim">&#9003;</button>
     </div>
+    <div class="quit-overlay" id="quit-overlay" hidden>
+      <div class="quit-sheet">
+        <h3>Paused</h3>
+        <button class="primary-btn" id="btn-resume">Resume</button>
+        <button class="secondary-btn" id="btn-save-quit">End &amp; save</button>
+        <button class="text-btn danger-text" id="btn-discard">Discard session</button>
+      </div>
+    </div>
   </main>
 
   <!-- ============ RESULTS SCREEN ============ -->
@@ -121,6 +135,7 @@
           <button data-m="all" class="on">All</button>
           <button data-m="sprint">Sprint</button>
           <button data-m="eighty">80 in 8</button>
+          <button data-m="target">Targeted</button>
         </div>
         <div class="seg small" id="seg-stat-window">
           <button data-w="all" class="on">All time</button>

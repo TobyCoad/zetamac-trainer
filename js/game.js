@@ -40,6 +40,58 @@
     return { op, x, y, answer };
   }
 
+  /* Targeted mode: ~45% literal replays of past slow/fumbled questions,
+   * the rest generated to match weak archetypes (sampled by weight). */
+  function makeTargetQuestion(cfg, model, prev) {
+    const enabled = op => cfg.ops[['add', 'sub', 'mul', 'div'][op]];
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const q = pickTargetQuestion(cfg, model, enabled);
+      if (!prev || q.x !== prev.x || q.y !== prev.y || q.op !== prev.op) return q;
+    }
+    return makeQuestion(cfg); // couldn't avoid a repeat — plain random
+  }
+
+  function pickTargetQuestion(cfg, model, enabled) {
+    const replays = model.replays.filter(r => enabled(r[0]));
+    if (replays.length >= 10 && Math.random() < 0.45) {
+      const [op, x, y] = replays[randInt(0, replays.length - 1)];
+      const answer = op === OP.add ? x + y : op === OP.sub ? x - y : op === OP.mul ? x * y : x / y;
+      return { op, x, y, answer };
+    }
+    const cands = model.archetypes.filter(a =>
+      enabled(a.op) &&
+      (a.spec.sf === undefined || (a.spec.sf >= cfg.mulA[0] && a.spec.sf <= cfg.mulA[1])));
+    if (!cands.length) return makeQuestion(cfg);
+    let r = Math.random() * cands.reduce((s, a) => s + a.weight, 0);
+    let arch = cands[cands.length - 1];
+    for (const a of cands) { r -= a.weight; if (r <= 0) { arch = a; break; } }
+
+    for (let i = 0; i < 40; i++) {
+      const q = genForSpec(cfg, arch.spec, model);
+      if (q) return q;
+    }
+    return makeQuestion(cfg);
+  }
+
+  function genForSpec(cfg, spec, model) {
+    if (spec.kind === 'add' || spec.kind === 'sub') {
+      const a = randInt(cfg.addA[0], cfg.addA[1]);
+      const b = randInt(cfg.addB[0], cfg.addB[1]);
+      if (spec.kind === 'add') {
+        const f = model.addF(a, b);
+        return f.carry === spec.carry && f.size === spec.size
+          ? { op: OP.add, x: a, y: b, answer: a + b } : null;
+      }
+      const x = a + b, y = a;
+      const f = model.subF(x, y);
+      return f.carry === spec.carry && f.size === spec.size
+        ? { op: OP.sub, x, y, answer: b } : null;
+    }
+    const sf = spec.sf, b = randInt(cfg.mulB[0], cfg.mulB[1]);
+    if (spec.kind === 'mul') return { op: OP.mul, x: sf, y: b, answer: sf * b };
+    return sf === 0 ? null : { op: OP.div, x: sf * b, y: sf, answer: b };
+  }
+
   function el(id) { return document.getElementById(id); }
 
   function fmtTime(s) {
@@ -47,7 +99,7 @@
     return `${m}:${String(r).padStart(2, '0')}`;
   }
 
-  function start(mode, settings) {
+  function start(mode, settings, model) {
     const cfg = mode === 'eighty'
       ? {
           ops: { add: true, sub: true, mul: true, div: true },
@@ -65,6 +117,8 @@
     const dur = mode === 'eighty' ? EIGHTY_DUR : settings.dur;
     state = {
       mode, cfg, dur,
+      model: mode === 'target' ? model : null,
+      paused: false,
       score: 0,
       qs: [],
       q: null,
@@ -84,6 +138,7 @@
     el('eighty-progress').hidden = mode !== 'eighty';
     el('eighty-fill').style.width = '0%';
     el('game-timer').textContent = fmtTime(dur);
+    el('quit-overlay').hidden = true;
 
     App.showScreen('game');
     nextQuestion();
@@ -98,7 +153,9 @@
   }
 
   function nextQuestion() {
-    state.q = makeQuestion(state.cfg);
+    state.q = state.model
+      ? makeTargetQuestion(state.cfg, state.model, state.q)
+      : makeQuestion(state.cfg);
     state.input = '';
     state.qErr = 0;
     state.wasWrong = false;
@@ -115,7 +172,7 @@
   }
 
   function key(k) {
-    if (!state || state.done) return;
+    if (!state || state.done || state.paused) return;
     if (k === 'B') {
       state.input = state.input.slice(0, -1);
     } else if (k === 'C') {
@@ -155,16 +212,44 @@
     nextQuestion();
   }
 
+  function pause() {
+    if (!state || state.done || state.paused) return;
+    state.paused = true;
+    state.pausedAt = Date.now();
+    clearInterval(state.timerId);
+  }
+
+  function resume() {
+    if (!state || state.done || !state.paused) return;
+    const d = Date.now() - state.pausedAt;
+    state.endsAt += d;
+    state.qStart += d;
+    state.paused = false;
+    state.timerId = setInterval(tick, 200);
+    tick();
+  }
+
+  function finishEarly() {
+    if (!state || state.done) return;
+    state.paused = false;
+    finish(false);
+  }
+
   function finish(hitTarget) {
     if (state.done) return;
     state.done = true;
     clearInterval(state.timerId);
 
+    // active seconds actually played — full duration on a natural finish,
+    // less if ended early via the pause menu (keeps pace stats honest)
+    const remaining = Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000));
+    const playedDur = Math.max(1, state.dur - remaining);
+
     const session = {
       id: `${state.startedAt.toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
       ts: state.startedAt,
       mode: state.mode,
-      dur: state.dur,
+      dur: playedDur,
       cfg: state.cfg,
       score: state.score,
       hitTargetMs: state.hitTargetMs,
@@ -216,5 +301,5 @@
     return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;
   }
 
-  window.Game = { start, key, quit, OP_SYM, EIGHTY_TARGET };
+  window.Game = { start, key, quit, pause, resume, finishEarly, OP_SYM, EIGHTY_TARGET };
 })();

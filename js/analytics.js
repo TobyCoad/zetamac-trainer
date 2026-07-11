@@ -278,6 +278,55 @@
       <div class="note">Grouped by structure (times table, operand size, carry/borrow). Ratio compares each group's median time to your overall median for that operation, so slow ops don't drown out patterns within fast ops. Groups need ≥6 samples.</div></div>`;
   }
 
+  /* ---- weakness model for targeted-practice mode ----
+   * Built from ALL history (ignores the stats filters). Returns null when
+   * there isn't enough data (<40 questions). */
+  function buildTargetModel() {
+    const qs = Store.loadSessions().flatMap(s => s.qs);
+    if (qs.length < 40) return null;
+    const opMed = [0, 1, 2, 3].map(op => median(qs.filter(q => q[0] === op).map(q => q[3])) || 1);
+
+    const groups = new Map();
+    for (const q of qs) {
+      const [op, x, y] = q;
+      let key, spec;
+      if (op === 0) { const f = addFeatures(x, y); key = `a${f.size}${f.carry}`; spec = { kind: 'add', size: f.size, carry: f.carry }; }
+      else if (op === 1) { const f = subFeatures(x, y); key = `s${f.size}${f.carry}`; spec = { kind: 'sub', size: f.size, carry: f.carry }; }
+      else if (op === 2) { key = `m${mulSmall(q)}`; spec = { kind: 'mul', sf: mulSmall(q) }; }
+      else { key = `d${mulSmall(q)}`; spec = { kind: 'div', sf: mulSmall(q) }; }
+      if (!groups.has(key)) groups.set(key, { op, spec, times: [], errs: 0 });
+      const g = groups.get(key);
+      g.times.push(q[3]);
+      g.errs += q[4] > 0 ? 1 : 0;
+    }
+
+    const archetypes = [];
+    for (const g of groups.values()) {
+      if (g.times.length < 6) continue;
+      const ratio = median(g.times) / opMed[g.op];
+      const errRate = g.errs / g.times.length;
+      // slow-and-sloppy archetypes dominate; everything keeps a small floor
+      const weight = 0.03 + Math.pow(Math.max(0.05, ratio - 0.75), 2) * (1 + 2 * errRate);
+      archetypes.push({ op: g.op, spec: g.spec, weight, ratio });
+    }
+
+    // literal replays: questions you got wrong entries on or answered slowly
+    const seen = new Set();
+    const replays = [];
+    for (let i = qs.length - 1; i >= 0 && replays.length < 200; i--) {
+      const q = qs[i];
+      if (q[4] === 0 && q[3] < 1.4 * opMed[q[0]]) continue;
+      const k = `${q[0]},${q[1]},${q[2]}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      replays.push([q[0], q[1], q[2]]);
+    }
+
+    return archetypes.length
+      ? { archetypes, replays, nQs: qs.length, addF: addFeatures, subF: subFeatures }
+      : null;
+  }
+
   function opForKey(k) {
     return k[0] === '+' ? 0 : k[0] === '−' ? 1 : k[0] === '×' ? 2 : 3;
   }
@@ -291,15 +340,18 @@
       const med = s.qs.length ? median(s.qs.map(q => q[3])) : 0;
       const tag = s.mode === 'eighty'
         ? `<span class="mode-tag eighty">80in8</span>`
+        : s.mode === 'target'
+        ? `<span class="mode-tag target">target ${s.dur}s</span>`
         : `<span class="mode-tag">${s.dur}s</span>`;
       const score = s.mode === 'eighty' && s.hitTargetMs
         ? `80 ✓ ${(s.hitTargetMs / 60000).toFixed(1)}m`
         : s.score;
-      return `<tr><td>${when}</td><td>${tag}</td><td><b>${score}</b></td><td>${paceOf(s).toFixed(1)}/m</td><td>${fmtS(med)}</td></tr>`;
+      return `<tr><td>${when}</td><td>${tag}</td><td><b>${score}</b></td><td>${paceOf(s).toFixed(1)}/m</td><td>${fmtS(med)}</td><td><button class="sess-del" data-sid="${s.id}" aria-label="delete session">×</button></td></tr>`;
     }).join('');
     return `<div class="stat-section"><h3>Recent sessions</h3>
-      <table class="sess-table"><thead><tr><th>When</th><th>Mode</th><th>Score</th><th>Pace</th><th>Med q</th></tr></thead>
-      <tbody>${rows}</tbody></table></div>`;
+      <table class="sess-table"><thead><tr><th>When</th><th>Mode</th><th>Score</th><th>Pace</th><th>Med q</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <div class="note">× removes a session and all its questions from every chart (e.g. one where you got interrupted).</div></div>`;
   }
 
   /* ---- data management ---- */
@@ -314,6 +366,14 @@
   }
 
   function wireDataButtons() {
+    document.querySelectorAll('.sess-del').forEach(b => {
+      b.onclick = () => {
+        if (confirm('Remove this session and its questions from all analytics?')) {
+          Store.deleteSession(b.dataset.sid);
+          render();
+        }
+      };
+    });
     document.getElementById('btn-export').onclick = () => {
       const blob = new Blob([Store.exportData()], { type: 'application/json' });
       const a = document.createElement('a');
@@ -356,5 +416,5 @@
     render();
   }
 
-  window.Analytics = { render, setFilter };
+  window.Analytics = { render, setFilter, buildTargetModel };
 })();

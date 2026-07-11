@@ -1,6 +1,6 @@
 /* Offline cache — stale-while-revalidate: serves from cache instantly, then
  * refreshes the cache in the background, so updates land on the next open. */
-const CACHE = 'zmt-v1';
+const CACHE = 'zmt-v2';
 const ASSETS = [
   './',
   './index.html',
