@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Arithmetic Trainer</title>
+  <meta name="description" content="Zetamac-style mental arithmetic sprint trainer with deep analytics">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Arithmetic">
+  <meta name="theme-color" content="#0f1117">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <!-- ============ PLAY TAB ============ -->
+  <main id="screen-home" class="screen active">
+    <header class="home-header">
+      <h1>Arithmetic Trainer</h1>
+      <p class="subtitle">zetamac-style sprint &middot; all data stays on this device</p>
+    </header>
+
+    <section class="mode-cards">
+      <button class="mode-card" id="btn-start-sprint">
+        <span class="mode-title">Sprint</span>
+        <span class="mode-desc" id="sprint-desc">120s &middot; classic zetamac</span>
+        <span class="mode-best" id="sprint-best"></span>
+      </button>
+      <button class="mode-card accent" id="btn-start-eighty">
+        <span class="mode-title">80 in 8</span>
+        <span class="mode-desc">80 questions &middot; 8 minutes &middot; default ranges</span>
+        <span class="mode-best" id="eighty-best"></span>
+      </button>
+    </section>
+
+    <section class="settings-panel">
+      <h2>Sprint settings</h2>
+      <div class="setting-row">
+        <label>Duration</label>
+        <div class="seg" id="seg-duration">
+          <button data-dur="30">30s</button>
+          <button data-dur="60">60s</button>
+          <button data-dur="120" class="on">120s</button>
+          <button data-dur="300">300s</button>
+          <button data-dur="480">480s</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <label>Operations</label>
+        <div class="seg multi" id="seg-ops">
+          <button data-op="add" class="on">+</button>
+          <button data-op="sub" class="on">&minus;</button>
+          <button data-op="mul" class="on">&times;</button>
+          <button data-op="div" class="on">&divide;</button>
+        </div>
+      </div>
+      <div class="setting-row ranges">
+        <label>Addition range <span class="hint">(subtraction is the inverse)</span></label>
+        <div class="range-inputs">
+          <span>(</span><input type="number" id="addA0" min="0" max="999"> <span>to</span> <input type="number" id="addA1" min="0" max="999"><span>)&nbsp;+&nbsp;(</span>
+          <input type="number" id="addB0" min="0" max="999"> <span>to</span> <input type="number" id="addB1" min="0" max="999"><span>)</span>
+        </div>
+      </div>
+      <div class="setting-row ranges">
+        <label>Multiplication range <span class="hint">(division is the inverse)</span></label>
+        <div class="range-inputs">
+          <span>(</span><input type="number" id="mulA0" min="0" max="999"> <span>to</span> <input type="number" id="mulA1" min="0" max="999"><span>)&nbsp;&times;&nbsp;(</span>
+          <input type="number" id="mulB0" min="0" max="999"> <span>to</span> <input type="number" id="mulB1" min="0" max="999"><span>)</span>
+        </div>
+      </div>
+      <button class="text-btn" id="btn-reset-defaults">Reset to zetamac defaults</button>
+    </section>
+  </main>
+
+  <!-- ============ GAME SCREEN ============ -->
+  <main id="screen-game" class="screen">
+    <div class="game-top">
+      <div class="game-stat"><span id="game-timer">2:00</span><label>time</label></div>
+      <div class="game-stat big"><span id="game-score">0</span><label id="game-score-label">score</label></div>
+      <button class="quit-btn" id="btn-quit">&times;</button>
+    </div>
+    <div class="eighty-progress" id="eighty-progress" hidden>
+      <div class="eighty-bar"><div id="eighty-fill"></div></div>
+    </div>
+    <div class="question-area">
+      <div class="question" id="question">7 &times; 8 =</div>
+      <div class="answer-box" id="answer-box">&nbsp;</div>
+    </div>
+    <div class="keypad" id="keypad">
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="C" class="key-dim">C</button><button data-k="0">0</button><button data-k="B" class="key-dim">&#9003;</button>
+    </div>
+  </main>
+
+  <!-- ============ RESULTS SCREEN ============ -->
+  <main id="screen-results" class="screen">
+    <div class="results-inner">
+      <h2 id="results-title">Time!</h2>
+      <div class="results-score" id="results-score">42</div>
+      <div class="results-sub" id="results-sub"></div>
+      <div class="results-grid" id="results-grid"></div>
+      <div class="results-buttons">
+        <button class="primary-btn" id="btn-again">Play again</button>
+        <button class="secondary-btn" id="btn-results-stats">View stats</button>
+        <button class="text-btn" id="btn-results-home">Home</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ STATS TAB ============ -->
+  <main id="screen-stats" class="screen">
+    <header class="stats-header">
+      <h1>Analytics</h1>
+      <div class="stats-filters">
+        <div class="seg small" id="seg-stat-mode">
+          <button data-m="all" class="on">All</button>
+          <button data-m="sprint">Sprint</button>
+          <button data-m="eighty">80 in 8</button>
+        </div>
+        <div class="seg small" id="seg-stat-window">
+          <button data-w="all" class="on">All time</button>
+          <button data-w="30">30d</button>
+          <button data-w="7">7d</button>
+        </div>
+      </div>
+    </header>
+    <div id="stats-body"><!-- rendered by analytics.js --></div>
+  </main>
+
+  <!-- ============ TAB BAR ============ -->
+  <nav class="tabbar" id="tabbar">
+    <button data-tab="home" class="on"><span class="tab-icon">&#9654;</span>Play</button>
+    <button data-tab="stats"><span class="tab-icon">&#9632;</span>Stats</button>
+  </nav>
+
+  <script src="./js/storage.js"></script>
+  <script src="./js/charts.js"></script>
+  <script src="./js/game.js"></script>
+  <script src="./js/analytics.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
