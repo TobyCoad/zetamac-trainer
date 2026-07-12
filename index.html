@@ -133,6 +133,14 @@
     </div>
   </main>
 
+  <!-- ============ PROGRESS TAB ============ -->
+  <main id="screen-progress" class="screen">
+    <header class="stats-header">
+      <h1>Progress</h1>
+    </header>
+    <div id="progress-body"><!-- rendered by progress.js --></div>
+  </main>
+
   <!-- ============ STATS TAB ============ -->
   <main id="screen-stats" class="screen">
     <header class="stats-header">
@@ -160,6 +168,7 @@
   <!-- ============ TAB BAR ============ -->
   <nav class="tabbar" id="tabbar">
     <button data-tab="home" class="on"><span class="tab-icon">&#9654;</span>Play</button>
+    <button data-tab="progress"><span class="tab-icon">&#9650;</span>Progress</button>
     <button data-tab="stats"><span class="tab-icon">&#9632;</span>Stats</button>
   </nav>
 
@@ -167,6 +176,7 @@
   <script src="./js/charts.js"></script>
   <script src="./js/game.js"></script>
   <script src="./js/analytics.js"></script>
+  <script src="./js/progress.js"></script>
   <script src="./js/app.js"></script>
 </body>
 </html>

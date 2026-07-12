@@ -1,19 +1,21 @@
 /* App shell — screen switching, settings UI, keyboard, SW registration. */
 (function () {
   function el(id) { return document.getElementById(id); }
-  const screens = ['home', 'game', 'results', 'stats'];
+  const screens = ['home', 'game', 'results', 'progress', 'stats'];
   let settings = Store.loadSettings();
 
   /* Bump APP_VERSION together with version.json and the sw.js cache name. */
-  const APP_VERSION = 11;
+  const APP_VERSION = 12;
   window.APP_VERSION = APP_VERSION;
 
   function showScreen(name) {
     for (const s of screens) el(`screen-${s}`).classList.toggle('active', s === name);
     el('tabbar').classList.toggle('hidden', name === 'game');
+    const tab = name === 'stats' ? 'stats' : name === 'progress' ? 'progress' : 'home';
     document.querySelectorAll('#tabbar button').forEach(b =>
-      b.classList.toggle('on', b.dataset.tab === (name === 'stats' ? 'stats' : 'home')));
+      b.classList.toggle('on', b.dataset.tab === tab));
     if (name === 'stats') Analytics.render();
+    if (name === 'progress') Progress.render();
     if (name === 'home') refreshBests();
     maybeShowUpdateBanner();
     window.scrollTo(0, 0);
@@ -312,12 +314,12 @@
     el('tabbar').addEventListener('click', e => {
       const b = e.target.closest('button');
       if (!b) return;
-      showScreen(b.dataset.tab === 'stats' ? 'stats' : 'home');
+      showScreen(b.dataset.tab === 'home' ? 'home' : b.dataset.tab);
     });
   }
 
   /* ---- boot ---- */
-  window.App = { showScreen };
+  window.App = { showScreen, getSettings: () => settings };
   wireSettings();
   wireGame();
   wireStats();
