@@ -4,6 +4,10 @@
   const screens = ['home', 'game', 'results', 'stats'];
   let settings = Store.loadSettings();
 
+  /* Bump APP_VERSION together with version.json and the sw.js cache name. */
+  const APP_VERSION = 6;
+  window.APP_VERSION = APP_VERSION;
+
   function showScreen(name) {
     for (const s of screens) el(`screen-${s}`).classList.toggle('active', s === name);
     el('tabbar').classList.toggle('hidden', name === 'game');
@@ -11,7 +15,46 @@
       b.classList.toggle('on', b.dataset.tab === (name === 'stats' ? 'stats' : 'home')));
     if (name === 'stats') Analytics.render();
     if (name === 'home') refreshBests();
+    maybeShowUpdateBanner();
     window.scrollTo(0, 0);
+  }
+
+  /* ---- in-app updates: poll version.json (network-only), offer a reload ---- */
+  let updateReady = false;
+
+  function maybeShowUpdateBanner() {
+    el('update-banner').hidden =
+      !(updateReady && !el('screen-game').classList.contains('active'));
+  }
+
+  async function checkForUpdate() {
+    try {
+      const r = await fetch('./version.json', { cache: 'no-store' });
+      const j = await r.json();
+      if (j.v && j.v !== APP_VERSION) {
+        updateReady = true;
+        maybeShowUpdateBanner();
+      }
+    } catch (e) { /* offline — try again next foreground */ }
+  }
+
+  function applyUpdate() {
+    const banner = el('update-banner');
+    banner.textContent = 'Updating…';
+    let done = false;
+    const finish = () => { if (!done) { done = true; location.reload(); } };
+    if (!('serviceWorker' in navigator)) return finish();
+    navigator.serviceWorker.getRegistration().then(reg => {
+      if (!reg) return finish();
+      // a new sw.js re-downloads every asset into a fresh cache on install;
+      // reload once it activates (or after a timeout as a fallback)
+      reg.addEventListener('updatefound', () => {
+        const w = reg.installing;
+        if (w) w.addEventListener('statechange', () => { if (w.state === 'activated') finish(); });
+      });
+      reg.update().catch(finish);
+      setTimeout(finish, 8000);
+    }).catch(finish);
   }
 
   function refreshBests() {
@@ -213,6 +256,12 @@
   wireStats();
   syncSettingsUI();
   showScreen('home');
+
+  el('update-banner').addEventListener('click', applyUpdate);
+  checkForUpdate();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate();
+  });
 
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('./sw.js').catch(() => {});

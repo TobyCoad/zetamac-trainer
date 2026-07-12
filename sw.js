@@ -1,6 +1,6 @@
 /* Offline cache — stale-while-revalidate: serves from cache instantly, then
  * refreshes the cache in the background, so updates land on the next open. */
-const CACHE = 'zmt-v5';
+const CACHE = 'zmt-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -17,7 +17,13 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  // cache:'no-cache' bypasses the HTTP cache so a new SW version always
+  // pulls genuinely fresh assets (Pages serves max-age=600)
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'no-cache' }))))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {
@@ -30,6 +36,7 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
+  if (new URL(e.request.url).pathname.endsWith('/version.json')) return; // network-only
   e.respondWith(
     caches.match(e.request).then(cached => {
       const fresh = fetch(e.request)

@@ -339,6 +339,22 @@ input[type="number"] {
 
 .empty-msg { text-align: center; color: var(--text-dim); font-size: 14px; padding: 40px 20px; line-height: 1.6; }
 
+.update-banner {
+  position: fixed;
+  left: 12px; right: 12px;
+  bottom: calc(var(--sab) + 58px);
+  background: var(--accent);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  border-radius: 12px;
+  padding: 12px;
+  text-align: center;
+  z-index: 15;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.update-banner[hidden] { display: none; }
+
 /* ---------- Tab bar ---------- */
 .tabbar {
   position: fixed;
