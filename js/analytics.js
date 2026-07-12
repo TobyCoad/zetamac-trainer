@@ -344,30 +344,39 @@
       g.errs += q[4] > 0 ? 1 : 0;
     }
 
-    const archetypes = [];
+    let archetypes = [];
     for (const g of groups.values()) {
       if (g.times.length < 6) continue;
       const ratio = median(g.times) / opMed[g.op];
       const errRate = g.errs / g.times.length;
-      // slow-and-sloppy archetypes dominate; everything keeps a small floor
       const weight = 0.03 + Math.pow(Math.max(0.05, ratio - 0.75), 2) * (1 + 2 * errRate);
-      archetypes.push({ op: g.op, spec: g.spec, weight, ratio });
+      archetypes.push({ op: g.op, spec: g.spec, weight, ratio, errRate });
     }
+    // NARROW: only genuinely weak archetypes make the cut — top 6 that are
+    // measurably slow (≥8% over your op median) or error-prone; sampling is
+    // sharpened (weight²) so the worst of those dominate the session
+    archetypes.sort((a, b) => b.weight - a.weight);
+    let weak = archetypes.filter(a => a.ratio >= 1.08 || a.errRate >= 0.15).slice(0, 6);
+    if (weak.length < 3) weak = archetypes.slice(0, 3); // early days: just the worst 3
+    weak = weak.map(a => Object.assign({}, a, { weight: a.weight * a.weight }));
 
-    // literal replays: questions you got wrong entries on or answered slowly
-    const seen = new Set();
-    const replays = [];
-    for (let i = qs.length - 1; i >= 0 && replays.length < 200; i--) {
-      const q = qs[i];
+    // literal replays ranked by how badly each went (slowness + wrong
+    // entries), worst 80 only — not just anything moderately slow
+    const cand = new Map();
+    for (const q of qs) {
       if (q[4] === 0 && q[3] < 1.4 * opMed[q[0]]) continue;
       const k = `${q[0]},${q[1]},${q[2]}`;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      replays.push([q[0], q[1], q[2]]);
+      const score = q[3] / opMed[q[0]] + (q[4] > 0 ? 1.5 : 0);
+      const prev = cand.get(k);
+      if (!prev || score > prev.score) cand.set(k, { q: [q[0], q[1], q[2]], score });
     }
+    const replays = [...cand.values()]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 80)
+      .map(c => c.q);
 
-    return archetypes.length
-      ? { archetypes, replays, nQs: qs.length, addF: addFeatures, subF: subFeatures }
+    return weak.length
+      ? { archetypes: weak, replays, nQs: qs.length, addF: addFeatures, subF: subFeatures }
       : null;
   }
 

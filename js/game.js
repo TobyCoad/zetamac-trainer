@@ -40,8 +40,8 @@
     return { op, x, y, answer };
   }
 
-  /* Targeted mode: ~45% literal replays of past slow/fumbled questions,
-   * the rest generated to match weak archetypes (sampled by weight). */
+  /* Targeted mode: ~50% literal replays of your worst past questions,
+   * the rest generated to match your weakest archetypes (weight²-sampled). */
   function makeTargetQuestion(cfg, model, prev) {
     const enabled = op => cfg.ops[['add', 'sub', 'mul', 'div'][op]];
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -53,7 +53,7 @@
 
   function pickTargetQuestion(cfg, model, enabled) {
     const replays = model.replays.filter(r => enabled(r[0]));
-    if (replays.length >= 10 && Math.random() < 0.45) {
+    if (replays.length >= 8 && Math.random() < 0.5) {
       const [op, x, y] = replays[randInt(0, replays.length - 1)];
       const answer = op === OP.add ? x + y : op === OP.sub ? x - y : op === OP.mul ? x * y : x / y;
       return { op, x, y, answer };
