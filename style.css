@@ -160,7 +160,7 @@ input[type="number"] {
 .keypad {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 6px;
   padding-bottom: 4px;
   touch-action: none; /* no pinch/pan recognition — every touch is a keypress */
 }
@@ -171,7 +171,7 @@ input[type="number"] {
   font-size: 26px;
   font-weight: 600;
   padding: 0;
-  height: min(15vw, 66px);
+  height: min(17vw, 74px);
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;

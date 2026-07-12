@@ -5,7 +5,7 @@
   let settings = Store.loadSettings();
 
   /* Bump APP_VERSION together with version.json and the sw.js cache name. */
-  const APP_VERSION = 7;
+  const APP_VERSION = 8;
   window.APP_VERSION = APP_VERSION;
 
   function showScreen(name) {
@@ -172,9 +172,10 @@
       b.classList.add('pressed');
       setTimeout(() => b.classList.remove('pressed'), 90);
     };
-    // nearest-key hit testing: fast typing lands sloppy taps in the gaps
-    // between keys — every touch on the keypad area registers the nearest
-    // key (up to 14px outside its edge), like the iOS keyboard does
+    // nearest-key hit testing: every touch registers the nearest key (up to
+    // 24px past its edge), like the iOS keyboard. Key geometry is cached
+    // OUTSIDE the hot path — recomputed on game start/resize/scroll, never
+    // per tap — so the touchstart handler does zero layout work.
     let keyRects = [];
     const computeKeyRects = () => {
       keyRects = [...keypad.querySelectorAll('button')].map(b => {
@@ -182,6 +183,11 @@
         return { b, cx: r.left + r.width / 2, cy: r.top + r.height / 2, hw: r.width / 2, hh: r.height / 2 };
       });
     };
+    window.addEventListener('resize', computeKeyRects);
+    window.addEventListener('scroll', computeKeyRects, { passive: true });
+    window.addEventListener('orientationchange', () => setTimeout(computeKeyRects, 300));
+    window.__computeKeyRects = computeKeyRects; // called by Game.start via App
+
     const keyAt = (x, y) => {
       let best = null, bestD = Infinity;
       for (const k of keyRects) {
@@ -190,15 +196,21 @@
         const d = dx * dx + dy * dy;
         if (d < bestD) { bestD = d; best = k.b; }
       }
-      return bestD <= 14 * 14 ? best : null;
+      return bestD <= 24 * 24 ? best : null;
     };
-    keypad.addEventListener('touchstart', e => {
-      e.preventDefault();
-      computeKeyRects(); // fresh each event — cheap, never stale
+
+    // capture on the whole game screen: taps in the margins beside/below the
+    // keypad element used to miss the listener entirely — another dead zone
+    const gameScreen = el('screen-game');
+    gameScreen.addEventListener('touchstart', e => {
+      if (!el('quit-overlay').hidden) return; // pause menu needs its clicks
+      if (!keyRects.length) computeKeyRects();
+      let hit = false;
       for (const t of e.changedTouches) {
         const btn = keyAt(t.clientX, t.clientY);
-        if (btn) { pressKey(btn.dataset.k); flash(btn); }
+        if (btn) { hit = true; pressKey(btn.dataset.k); flash(btn); }
       }
+      if (hit) e.preventDefault(); // quit-button taps (no key nearby) keep their click
     }, { passive: false });
     const touchDone = e => {
       const stillOnB = [...e.touches].some(t => {
@@ -207,8 +219,8 @@
       });
       if (!stillOnB) stopRepeat();
     };
-    keypad.addEventListener('touchend', touchDone);
-    keypad.addEventListener('touchcancel', touchDone);
+    gameScreen.addEventListener('touchend', touchDone);
+    gameScreen.addEventListener('touchcancel', touchDone);
     // mouse/pen (desktop) — touch is fully handled above
     keypad.addEventListener('pointerdown', e => {
       if (e.pointerType === 'touch') return;

@@ -142,6 +142,8 @@
     el('quit-overlay').hidden = true;
 
     App.showScreen('game');
+    if (window.__computeKeyRects) window.__computeKeyRects(); // fresh key geometry for this layout
+    lastQuestionText = null;
     el('question').textContent = 'Ready…';
     el('question').classList.add('ready');
     el('answer-box').textContent = ' ';
@@ -181,9 +183,17 @@
     render();
   }
 
+  let lastQuestionText = null;
+
   function render() {
     const q = state.q;
-    el('question').textContent = `${q.x} ${OP_SYM[q.op]} ${q.y} =`;
+    // only touch the question node when the question actually changes —
+    // redundant writes dirty layout and slow the next tap's processing
+    const qText = `${q.x} ${OP_SYM[q.op]} ${q.y} =`;
+    if (qText !== lastQuestionText) {
+      lastQuestionText = qText;
+      el('question').textContent = qText;
+    }
     const box = el('answer-box');
     box.textContent = state.input || ' ';
     // no wrong-input styling: the box gives zero feedback on whether the
