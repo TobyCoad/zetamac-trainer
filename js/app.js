@@ -5,7 +5,7 @@
   let settings = Store.loadSettings();
 
   /* Bump APP_VERSION together with version.json and the sw.js cache name. */
-  const APP_VERSION = 6;
+  const APP_VERSION = 7;
   window.APP_VERSION = APP_VERSION;
 
   function showScreen(name) {
@@ -172,18 +172,37 @@
       b.classList.add('pressed');
       setTimeout(() => b.classList.remove('pressed'), 90);
     };
+    // nearest-key hit testing: fast typing lands sloppy taps in the gaps
+    // between keys — every touch on the keypad area registers the nearest
+    // key (up to 14px outside its edge), like the iOS keyboard does
+    let keyRects = [];
+    const computeKeyRects = () => {
+      keyRects = [...keypad.querySelectorAll('button')].map(b => {
+        const r = b.getBoundingClientRect();
+        return { b, cx: r.left + r.width / 2, cy: r.top + r.height / 2, hw: r.width / 2, hh: r.height / 2 };
+      });
+    };
+    const keyAt = (x, y) => {
+      let best = null, bestD = Infinity;
+      for (const k of keyRects) {
+        const dx = Math.max(Math.abs(x - k.cx) - k.hw, 0);
+        const dy = Math.max(Math.abs(y - k.cy) - k.hh, 0);
+        const d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = k.b; }
+      }
+      return bestD <= 14 * 14 ? best : null;
+    };
     keypad.addEventListener('touchstart', e => {
       e.preventDefault();
+      computeKeyRects(); // fresh each event — cheap, never stale
       for (const t of e.changedTouches) {
-        const b = document.elementFromPoint(t.clientX, t.clientY);
-        const btn = b && b.closest('#keypad button');
+        const btn = keyAt(t.clientX, t.clientY);
         if (btn) { pressKey(btn.dataset.k); flash(btn); }
       }
     }, { passive: false });
     const touchDone = e => {
       const stillOnB = [...e.touches].some(t => {
-        const b = document.elementFromPoint(t.clientX, t.clientY);
-        const btn = b && b.closest('#keypad button');
+        const btn = keyAt(t.clientX, t.clientY);
         return btn && btn.dataset.k === 'B';
       });
       if (!stillOnB) stopRepeat();
