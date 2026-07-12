@@ -131,6 +131,7 @@
       hitTargetMs: null,
       timerId: null,
       done: false,
+      ready: true, // 1s get-ready buffer before the clock starts
     };
 
     el('game-score').textContent = '0';
@@ -141,8 +142,25 @@
     el('quit-overlay').hidden = true;
 
     App.showScreen('game');
-    nextQuestion();
-    state.timerId = setInterval(tick, 200);
+    el('question').textContent = 'Ready…';
+    el('question').classList.add('ready');
+    el('answer-box').textContent = ' ';
+    armReady();
+  }
+
+  function armReady() {
+    const myState = state, token = {};
+    state.readyToken = token;
+    setTimeout(() => {
+      // inert if the game was quit/restarted, ended, re-armed, or is paused
+      if (state !== myState || state.done || state.readyToken !== token || state.paused) return;
+      state.ready = false;
+      state.startedAt = Date.now();
+      state.endsAt = Date.now() + state.dur * 1000;
+      el('question').classList.remove('ready');
+      nextQuestion();
+      state.timerId = setInterval(tick, 200);
+    }, 1000);
   }
 
   function tick() {
@@ -173,7 +191,7 @@
   }
 
   function key(k) {
-    if (!state || state.done || state.paused) return;
+    if (!state || state.done || state.paused || state.ready) return;
     if (k === 'B') {
       state.input = state.input.slice(0, -1);
     } else if (k === 'C') {
@@ -222,6 +240,11 @@
 
   function resume() {
     if (!state || state.done || !state.paused) return;
+    if (state.ready) { // paused during the get-ready buffer: restart the buffer
+      state.paused = false;
+      armReady();
+      return;
+    }
     const d = Date.now() - state.pausedAt;
     state.endsAt += d;
     state.qStart += d;

@@ -106,14 +106,58 @@
       Game.quit();
     });
 
-    // keypad: pointerdown fires the moment a finger/cursor lands — no
-    // synthetic click, no touch/click double-handling
-    el('keypad').addEventListener('pointerdown', e => {
-      const b = e.target.closest('button');
-      if (!b) return;
+    // keypad: raw touch events, one Game.key per touch point — two fingers
+    // landing together (digit + backspace) both register, and touch-action:
+    // none stops iOS from eating them as pinch/pan gestures. Backspace
+    // auto-repeats while held.
+    const keypad = el('keypad');
+    let repeatDelay = null, repeatTick = null;
+    const stopRepeat = () => {
+      clearTimeout(repeatDelay); clearInterval(repeatTick);
+      repeatDelay = repeatTick = null;
+    };
+    const pressKey = k => {
+      Game.key(k);
+      if (k === 'B') {
+        stopRepeat();
+        repeatDelay = setTimeout(() => {
+          repeatTick = setInterval(() => Game.key('B'), 90);
+        }, 350);
+      }
+    };
+    const flash = b => {
+      b.classList.add('pressed');
+      setTimeout(() => b.classList.remove('pressed'), 90);
+    };
+    keypad.addEventListener('touchstart', e => {
       e.preventDefault();
-      Game.key(b.dataset.k);
+      for (const t of e.changedTouches) {
+        const b = document.elementFromPoint(t.clientX, t.clientY);
+        const btn = b && b.closest('#keypad button');
+        if (btn) { pressKey(btn.dataset.k); flash(btn); }
+      }
+    }, { passive: false });
+    const touchDone = e => {
+      const stillOnB = [...e.touches].some(t => {
+        const b = document.elementFromPoint(t.clientX, t.clientY);
+        const btn = b && b.closest('#keypad button');
+        return btn && btn.dataset.k === 'B';
+      });
+      if (!stillOnB) stopRepeat();
+    };
+    keypad.addEventListener('touchend', touchDone);
+    keypad.addEventListener('touchcancel', touchDone);
+    // mouse/pen (desktop) — touch is fully handled above
+    keypad.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'touch') return;
+      const btn = e.target.closest('button');
+      if (!btn) return;
+      e.preventDefault();
+      pressKey(btn.dataset.k);
+      flash(btn);
     });
+    keypad.addEventListener('pointerup', e => { if (e.pointerType !== 'touch') stopRepeat(); });
+    keypad.addEventListener('pointerleave', e => { if (e.pointerType !== 'touch') stopRepeat(); });
 
     // hardware keyboard (desktop practice)
     document.addEventListener('keydown', e => {
