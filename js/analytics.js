@@ -406,7 +406,7 @@
         <button id="btn-import">Import</button>
         <button id="btn-wipe" class="danger">Delete all data</button>
       </div>
-      <div class="note">Everything lives in this browser's storage — export occasionally as a backup (iOS can evict PWA storage if unused for weeks). App v${window.APP_VERSION || '?'}.</div></div>`;
+      <div class="note">Everything lives in this browser's storage — export occasionally as a backup (iOS can evict PWA storage if unused for weeks). App v${window.APP_VERSION || '?'} · ${Number(localStorage.getItem('zmt.missedTaps')) || 0} missed taps recorded.</div></div>`;
   }
 
   function wireDataButtons() {

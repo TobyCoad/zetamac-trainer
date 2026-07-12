@@ -110,7 +110,9 @@ input[type="number"] {
 #screen-game {
   display: none;
   flex-direction: column;
-  padding-bottom: calc(var(--sab) + 10px);
+  /* keep the bottom key row clear of the iOS home-indicator gesture band,
+     which defers/swallows touches near the bottom-centre of the screen */
+  padding-bottom: calc(var(--sab) + 28px);
   touch-action: none; /* no gesture recognition anywhere mid-game — raw touches only */
   user-select: none;
   -webkit-user-select: none;

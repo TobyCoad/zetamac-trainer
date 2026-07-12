@@ -5,7 +5,7 @@
   let settings = Store.loadSettings();
 
   /* Bump APP_VERSION together with version.json and the sw.js cache name. */
-  const APP_VERSION = 8;
+  const APP_VERSION = 9;
   window.APP_VERSION = APP_VERSION;
 
   function showScreen(name) {
@@ -176,12 +176,19 @@
     // 24px past its edge), like the iOS keyboard. Key geometry is cached
     // OUTSIDE the hot path — recomputed on game start/resize/scroll, never
     // per tap — so the touchstart handler does zero layout work.
-    let keyRects = [];
+    let keyRects = [], bottomRow = [], padBounds = null;
     const computeKeyRects = () => {
       keyRects = [...keypad.querySelectorAll('button')].map(b => {
         const r = b.getBoundingClientRect();
         return { b, cx: r.left + r.width / 2, cy: r.top + r.height / 2, hw: r.width / 2, hh: r.height / 2 };
       });
+      const maxCy = Math.max(...keyRects.map(k => k.cy));
+      bottomRow = keyRects.filter(k => k.cy > maxCy - 5);
+      padBounds = {
+        left: Math.min(...keyRects.map(k => k.cx - k.hw)),
+        right: Math.max(...keyRects.map(k => k.cx + k.hw)),
+        bottom: maxCy,
+      };
     };
     window.addEventListener('resize', computeKeyRects);
     window.addEventListener('scroll', computeKeyRects, { passive: true });
@@ -196,7 +203,20 @@
         const d = dx * dx + dy * dy;
         if (d < bestD) { bestD = d; best = k.b; }
       }
-      return bestD <= 24 * 24 ? best : null;
+      if (bestD <= 24 * 24) return best;
+      // below the keypad there is nothing else to hit — a stretched thumb
+      // contacts lower than aimed, so any touch under the bottom row (down to
+      // the screen edge) snaps to the nearest bottom-row key by column
+      if (padBounds && y > padBounds.bottom &&
+          x > padBounds.left - 24 && x < padBounds.right + 24) {
+        let bb = null, bd = Infinity;
+        for (const k of bottomRow) {
+          const d = Math.abs(x - k.cx);
+          if (d < bd) { bd = d; bb = k.b; }
+        }
+        return bb;
+      }
+      return null;
     };
 
     // capture on the whole game screen: taps in the margins beside/below the
@@ -209,6 +229,14 @@
       for (const t of e.changedTouches) {
         const btn = keyAt(t.clientX, t.clientY);
         if (btn) { hit = true; pressKey(btn.dataset.k); flash(btn); }
+        else if (padBounds && t.clientY > padBounds.bottom - 200) {
+          // near-keypad touch that resolved to nothing — count it so the
+          // stats page can show whether taps are still getting lost
+          try {
+            localStorage.setItem('zmt.missedTaps',
+              String((Number(localStorage.getItem('zmt.missedTaps')) || 0) + 1));
+          } catch (err) {}
+        }
       }
       if (hit) e.preventDefault(); // quit-button taps (no key nearby) keep their click
     }, { passive: false });
