@@ -72,8 +72,10 @@ input[type="number"] {
 }
 .mode-card:active { transform: scale(0.97); }
 .mode-card.accent { border-color: var(--accent); background: linear-gradient(160deg, #1b2438, var(--surface)); }
-.mode-card.full { width: 100%; margin-bottom: 18px; border-color: #3d3350; background: linear-gradient(160deg, #251d33, var(--surface)); }
-.mode-card.full.disabled { opacity: 0.55; }
+.mode-cards.second-row { margin-top: -6px; }
+.mode-card.target { border-color: #3d3350; background: linear-gradient(160deg, #251d33, var(--surface)); }
+.mode-card.drill { border-color: #4a3a22; background: linear-gradient(160deg, #2b2315, var(--surface)); }
+.mode-card.disabled { opacity: 0.55; }
 .mode-title { font-size: 19px; font-weight: 700; }
 .mode-desc { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
 .mode-best { font-size: 12px; color: var(--accent2); font-weight: 600; min-height: 15px; }
@@ -328,6 +330,7 @@ input[type="number"] {
 .sess-table .mode-tag { font-size: 10px; padding: 2px 6px; border-radius: 5px; background: var(--surface2); color: var(--text-dim); }
 .sess-table .mode-tag.eighty { background: #1b3330; color: var(--accent2); }
 .sess-table .mode-tag.target { background: #2b2138; color: #c9a7ff; }
+.sess-table .mode-tag.drill { background: #33291b; color: var(--amber); }
 .sess-del {
   color: var(--text-dim);
   font-size: 15px;

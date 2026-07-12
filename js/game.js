@@ -92,6 +92,88 @@
     return sf === 0 ? null : { op: OP.div, x: sf * b, y: sf, answer: b };
   }
 
+  /* ---- drill mode: live in-run adaptation ----
+   * Struggle on a question (slow vs baseline, or a wrong entry) and it
+   * schedules probes: a similar neighbour immediately, another shortly
+   * after, and the exact question again ~6 later. Between probes it
+   * samples from whatever the run has found weak so far. */
+
+  function drillBaseline(op) {
+    const d = state.drill;
+    if (d.opBase) return d.opBase[op];
+    return d.opTimes[op].length >= 5 ? median(d.opTimes[op]) : 2800;
+  }
+
+  function drillObserve(q, ms, err) {
+    const d = state.drill;
+    d.opTimes[q.op].push(ms);
+    const ratio = ms / drillBaseline(q.op);
+    const { key, spec } = Analytics.qSpec(q.op, q.x, q.y);
+    const cur = d.live.get(key) || { w: 1, op: q.op, spec };
+    cur.w = 0.65 * cur.w + 0.35 * ratio;
+    d.live.set(key, cur);
+    if (ratio >= 1.3 || err > 0) {
+      d.pending.push({ cd: 1, q: neighborOf(q) });   // next question
+      d.pending.push({ cd: 3, q: neighborOf(q) });   // shortly after
+      d.pending.push({ cd: 6, q: { op: q.op, x: q.x, y: q.y, answer: q.answer } }); // exact re-ask
+      if (d.pending.length > 12) d.pending.splice(0, d.pending.length - 12);
+    }
+  }
+
+  function clampR(v, r) { return Math.max(r[0], Math.min(r[1], v)); }
+
+  /* a structurally similar question: same small factor / same carry-borrow
+   * territory, operands nudged — 12×47 begets 12×43, 12×52, ... */
+  function neighborOf(q) {
+    const { op, x, y } = q, cfg = state.cfg;
+    for (let i = 0; i < 30; i++) {
+      let nq;
+      if (op === 2) {
+        const sf = Math.min(x, y);
+        const b = clampR(Math.max(x, y) + randInt(-8, 8), cfg.mulB);
+        nq = { op, x: sf, y: b, answer: sf * b };
+      } else if (op === 3) {
+        const sf = y;
+        const b = clampR(x / y + randInt(-8, 8), cfg.mulB);
+        if (sf === 0) break;
+        nq = { op, x: sf * b, y: sf, answer: b };
+      } else if (op === 0) {
+        const a = clampR(x + randInt(-9, 9), cfg.addA);
+        const b = clampR(y + randInt(-9, 9), cfg.addB);
+        nq = { op, x: a, y: b, answer: a + b };
+      } else { // sub presented as x−y: keep the underlying pair nearby
+        const a = clampR(y + randInt(-9, 9), cfg.addA);
+        const b = clampR((x - y) + randInt(-9, 9), cfg.addB);
+        nq = { op, x: a + b, y: a, answer: b };
+      }
+      if (!(nq.x === x && nq.y === y)) return nq;
+    }
+    return { op, x, y, answer: q.answer };
+  }
+
+  function nextDrillQuestion() {
+    const d = state.drill;
+    for (const p of d.pending) p.cd--;
+    const due = d.pending.findIndex(p => p.cd <= 0);
+    if (due >= 0) return d.pending.splice(due, 1)[0].q;
+
+    // sample the run's own weak map (badness EWMA ≥ 1.25), worst-weighted
+    const weak = [...d.live.values()].filter(v => v.w >= 1.25);
+    if (weak.length && Math.random() < 0.6) {
+      let r = Math.random() * weak.reduce((s, v) => s + (v.w - 1) ** 2, 0);
+      let pick = weak[weak.length - 1];
+      for (const v of weak) { r -= (v.w - 1) ** 2; if (r <= 0) { pick = v; break; } }
+      for (let i = 0; i < 40; i++) {
+        const q = genForSpec(state.cfg, pick.spec, Analytics.featureFns);
+        if (q) return q;
+      }
+    }
+    // otherwise: historical weak-spot model if available, else uniform
+    return state.model
+      ? makeTargetQuestion(state.cfg, state.model, state.q)
+      : makeQuestion(state.cfg);
+  }
+
   function el(id) { return document.getElementById(id); }
 
   function fmtTime(s) {
@@ -114,10 +196,17 @@
         };
     if (!Object.values(cfg.ops).some(Boolean)) cfg.ops.add = true;
 
-    const dur = mode === 'eighty' ? EIGHTY_DUR : settings.dur;
+    const dur = mode === 'eighty' ? EIGHTY_DUR : mode === 'drill' ? Infinity : settings.dur;
     state = {
       mode, cfg, dur,
-      model: mode === 'target' ? model : null,
+      model: (mode === 'target' || mode === 'drill') ? model : null,
+      drill: mode === 'drill' ? {
+        pending: [],              // scheduled probes: {cd, q} served when cd hits 0
+        live: new Map(),          // archetype key -> {w (EWMA badness), op, spec}
+        opTimes: [[], [], [], []],
+        opBase: Analytics.opMedians(), // historical ms baselines, or null
+      } : null,
+      pausedTotal: 0,
       paused: false,
       score: 0,
       qs: [],
@@ -135,10 +224,11 @@
     };
 
     el('game-score').textContent = '0';
-    el('game-score-label').textContent = mode === 'eighty' ? `of ${EIGHTY_TARGET}` : 'score';
+    el('game-score-label').textContent =
+      mode === 'eighty' ? `of ${EIGHTY_TARGET}` : mode === 'drill' ? 'answered' : 'score';
     el('eighty-progress').hidden = mode !== 'eighty';
     el('eighty-fill').style.width = '0%';
-    el('game-timer').textContent = fmtTime(dur);
+    el('game-timer').textContent = mode === 'drill' ? '0:00' : fmtTime(dur);
     el('quit-overlay').hidden = true;
 
     App.showScreen('game');
@@ -167,13 +257,20 @@
 
   function tick() {
     if (!state || state.done) return;
+    if (state.mode === 'drill') { // endless: count up, never expire
+      el('game-timer').textContent =
+        fmtTime(Math.max(0, Math.floor((Date.now() - state.startedAt - state.pausedTotal) / 1000)));
+      return;
+    }
     const left = Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000));
     el('game-timer').textContent = fmtTime(left);
     if (Date.now() >= state.endsAt) finish(false);
   }
 
   function nextQuestion() {
-    state.q = state.model
+    state.q = state.drill
+      ? nextDrillQuestion()
+      : state.model
       ? makeTargetQuestion(state.cfg, state.model, state.q)
       : makeQuestion(state.cfg);
     state.input = '';
@@ -228,6 +325,7 @@
   function correct() {
     const ms = Math.round(performance.now() - state.qStart);
     state.qs.push([state.q.op, state.q.x, state.q.y, ms, state.qErr]);
+    if (state.drill) drillObserve(state.q, ms, state.qErr);
     state.score++;
     el('game-score').textContent = String(state.score);
     if (state.mode === 'eighty') {
@@ -258,6 +356,7 @@
     const d = Date.now() - state.pausedAt;
     state.endsAt += d;
     state.qStart += d;
+    state.pausedTotal += d;
     state.paused = false;
     state.timerId = setInterval(tick, 200);
     tick();
@@ -275,9 +374,15 @@
     clearInterval(state.timerId);
 
     // active seconds actually played — full duration on a natural finish,
-    // less if ended early via the pause menu (keeps pace stats honest)
-    const remaining = Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000));
-    const playedDur = Math.max(1, state.dur - remaining);
+    // less if ended early via the pause menu (keeps pace stats honest);
+    // drill has no end time, so measure elapsed minus pauses directly
+    let playedDur;
+    if (state.mode === 'drill') {
+      playedDur = Math.max(1, Math.round((Date.now() - state.startedAt - state.pausedTotal) / 1000));
+    } else {
+      const remaining = Math.max(0, Math.ceil((state.endsAt - Date.now()) / 1000));
+      playedDur = Math.max(1, state.dur - remaining);
+    }
 
     const session = {
       id: `${state.startedAt.toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
@@ -312,11 +417,13 @@
 
     el('results-title').textContent =
       hitTarget ? `\u{1F3AF} 80 in ${fmtTime(Math.round(elapsedS))}!` :
-      s.mode === 'eighty' ? 'Time — 80 in 8' : 'Time!';
+      s.mode === 'eighty' ? 'Time — 80 in 8' :
+      s.mode === 'drill' ? 'Drill complete' : 'Time!';
     el('results-score').textContent = String(s.score);
     el('results-sub').textContent =
       s.mode === 'eighty'
-        ? (hitTarget ? `finished with ${fmtTime(Math.round(s.dur - elapsedS))} to spare` : `of ${EIGHTY_TARGET} target`)
+        ? (hitTarget ? `finished with ${fmtTime(Math.round(EIGHTY_DUR - elapsedS))} to spare` : `of ${EIGHTY_TARGET} target`)
+        : s.mode === 'drill' ? `${fmtTime(s.dur)} of freeform practice`
         : `${s.dur}s sprint`;
 
     const perOp = [0, 1, 2, 3].map(op => s.qs.filter(q => q[0] === op).length);

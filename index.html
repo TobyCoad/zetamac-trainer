@@ -36,11 +36,18 @@
       </button>
     </section>
 
-    <button class="mode-card full" id="btn-start-target">
-      <span class="mode-title">Targeted practice</span>
-      <span class="mode-desc" id="target-desc">narrowly drills your weakest question types + replays of the exact questions you struggled on</span>
-      <span class="mode-best" id="target-best"></span>
-    </button>
+    <section class="mode-cards second-row">
+      <button class="mode-card target" id="btn-start-target">
+        <span class="mode-title">Targeted</span>
+        <span class="mode-desc" id="target-desc">narrowly drills your weakest question types + replays of ones you struggled on</span>
+        <span class="mode-best" id="target-best"></span>
+      </button>
+      <button class="mode-card drill" id="btn-start-drill">
+        <span class="mode-title">Drill</span>
+        <span class="mode-desc">endless, no timer &mdash; adapts live: struggle on 12&times;47 and it probes similar ones until you're fast</span>
+        <span class="mode-best" id="drill-best"></span>
+      </button>
+    </section>
 
     <section class="settings-panel">
       <h2>Sprint settings</h2>
@@ -136,6 +143,7 @@
           <button data-m="sprint">Sprint</button>
           <button data-m="eighty">80 in 8</button>
           <button data-m="target">Targeted</button>
+          <button data-m="drill">Drill</button>
         </div>
         <div class="seg small" id="seg-stat-window">
           <button data-w="all" class="on">All time</button>

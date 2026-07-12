@@ -5,7 +5,7 @@
   let settings = Store.loadSettings();
 
   /* Bump APP_VERSION together with version.json and the sw.js cache name. */
-  const APP_VERSION = 10;
+  const APP_VERSION = 11;
   window.APP_VERSION = APP_VERSION;
 
   function showScreen(name) {
@@ -73,6 +73,11 @@
     el('target-best').textContent = model
       ? `${model.archetypes.length} archetypes · ${model.replays.length} replays queued`
       : `needs ~40 answered questions (${ss.reduce((a, s) => a + s.qs.length, 0)} so far)`;
+
+    const drills = ss.filter(s => s.mode === 'drill');
+    el('drill-best').textContent = drills.length
+      ? `${Math.round(drills.reduce((a, s) => a + s.dur, 0) / 60)} min drilled total`
+      : '';
   }
 
   /* ---- settings UI ---- */
@@ -130,6 +135,8 @@
     el('btn-start-sprint').addEventListener('click', () => Game.start('sprint', settings));
     el('btn-start-eighty').addEventListener('click', () => Game.start('eighty', settings));
     el('btn-start-target').addEventListener('click', () => startTarget());
+    el('btn-start-drill').addEventListener('click', () =>
+      Game.start('drill', settings, Analytics.buildTargetModel())); // model optional — drill adapts live
 
     // quit button = pause menu (resume / save / discard), never an instant kill
     el('btn-quit').addEventListener('click', () => {
@@ -272,6 +279,7 @@
     el('btn-again').addEventListener('click', () => {
       const last = Store.loadSessions().slice(-1)[0];
       if (last && last.mode === 'target') startTarget();
+      else if (last && last.mode === 'drill') Game.start('drill', settings, Analytics.buildTargetModel());
       else Game.start(last && last.mode === 'eighty' ? 'eighty' : 'sprint', settings);
     });
     el('btn-results-stats').addEventListener('click', () => showScreen('stats'));

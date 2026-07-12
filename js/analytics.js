@@ -131,6 +131,7 @@
    * (end-&-save) sessions store their real played duration and therefore
    * drop out of the standard-duration groups automatically. */
   function highScoreSection(ss) {
+    if (filters.mode === 'drill') return ''; // endless mode — score isn't comparable
     let group, label;
     if (filters.mode === 'eighty') {
       group = ss.filter(s => s.mode === 'eighty');
@@ -380,6 +381,22 @@
       : null;
   }
 
+  /* ---- helpers for drill mode's live adaptation ---- */
+  function opMedians() {
+    const qs = Store.loadSessions().flatMap(s => s.qs);
+    if (qs.length < 40) return null;
+    return [0, 1, 2, 3].map(op => median(qs.filter(q => q[0] === op).map(q => q[3])) || 2800);
+  }
+
+  function qSpec(op, x, y) {
+    if (op === 0) { const f = addFeatures(x, y); return { key: `a${f.size}${f.carry}`, spec: { kind: 'add', size: f.size, carry: f.carry } }; }
+    if (op === 1) { const f = subFeatures(x, y); return { key: `s${f.size}${f.carry}`, spec: { kind: 'sub', size: f.size, carry: f.carry } }; }
+    const sf = mulSmall([op, x, y]);
+    return op === 2
+      ? { key: `m${sf}`, spec: { kind: 'mul', sf } }
+      : { key: `d${sf}`, spec: { kind: 'div', sf } };
+  }
+
   function opForKey(k) {
     return k[0] === '+' ? 0 : k[0] === '−' ? 1 : k[0] === '×' ? 2 : 3;
   }
@@ -395,6 +412,8 @@
         ? `<span class="mode-tag eighty">80in8</span>`
         : s.mode === 'target'
         ? `<span class="mode-tag target">target ${s.dur}s</span>`
+        : s.mode === 'drill'
+        ? `<span class="mode-tag drill">drill ${s.dur >= 90 ? Math.round(s.dur / 60) + 'm' : s.dur + 's'}</span>`
         : `<span class="mode-tag">${s.dur}s</span>`;
       const score = s.mode === 'eighty' && s.hitTargetMs
         ? `80 ✓ ${(s.hitTargetMs / 60000).toFixed(1)}m`
@@ -469,5 +488,8 @@
     render();
   }
 
-  window.Analytics = { render, setFilter, buildTargetModel };
+  window.Analytics = {
+    render, setFilter, buildTargetModel, opMedians, qSpec,
+    featureFns: { addF: addFeatures, subF: subFeatures },
+  };
 })();
