@@ -433,7 +433,33 @@
       <div class="rcell"><b>${errs}</b><small>wrong entries</small></div>
       <div class="rcell"><b>${perOp.map((c, i) => `${OP_SYM[i]}${c}`).join(' ')}</b><small>mix</small></div>`;
 
+    renderQuestionLog(s);
     App.showScreen('results');
+  }
+
+  /* every question of the run, coloured by speed relative to the run's own
+   * per-operation median (so slow ops aren't unfairly red) */
+  function renderQuestionLog(s) {
+    const box = el('results-qs');
+    if (!s.qs.length) { box.innerHTML = ''; return; }
+    const opMedRun = [0, 1, 2, 3].map(op => {
+      const t = s.qs.filter(q => q[0] === op).map(q => q[3]);
+      return t.length >= 3 ? median(t) : null;
+    });
+    const runMed = median(s.qs.map(q => q[3])) || 1;
+    const rows = s.qs.map(q => {
+      const [op, x, y, ms, err] = q;
+      const color = Charts.ratioColor(ms / (opMedRun[op] || runMed));
+      const ans = op === 0 ? x + y : op === 1 ? x - y : op === 2 ? x * y : x / y;
+      return `<div class="rq" style="border-left-color:${color}">
+        <span class="rq-q">${x} ${OP_SYM[op]} ${y} = ${ans}</span>
+        ${err > 0 ? '<span class="rq-err">✗</span>' : ''}
+        <span class="rq-t" style="color:${color}">${(ms / 1000).toFixed(1)}s</span>
+      </div>`;
+    }).join('');
+    box.innerHTML = `<h3>All ${s.qs.length} questions</h3>
+      <div class="rq-list">${rows}</div>
+      <div class="rq-note">Colour = speed vs your median for that operation this run. ✗ = had wrong entries.</div>`;
   }
 
   function median(arr) {
