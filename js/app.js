@@ -5,7 +5,7 @@
   let settings = Store.loadSettings();
 
   /* Bump APP_VERSION together with version.json and the sw.js cache name. */
-  const APP_VERSION = 13;
+  const APP_VERSION = 14;
   window.APP_VERSION = APP_VERSION;
 
   function showScreen(name) {
@@ -73,7 +73,7 @@
     const model = Analytics.buildTargetModel();
     el('btn-start-target').classList.toggle('disabled', !model);
     el('target-best').textContent = model
-      ? `${model.archetypes.length} archetypes · ${model.replays.length} replays queued`
+      ? `${model.pool.length} hardest questions in the deck`
       : `needs ~40 answered questions (${ss.reduce((a, s) => a + s.qs.length, 0)} so far)`;
 
     const drills = ss.filter(s => s.mode === 'drill');

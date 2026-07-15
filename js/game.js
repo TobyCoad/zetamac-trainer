@@ -40,37 +40,29 @@
     return { op, x, y, answer };
   }
 
-  /* Targeted mode: ~50% literal replays of your worst past questions,
-   * the rest generated to match your weakest archetypes (weight²-sampled). */
+  /* Targeted mode: PURELY historical questions — the pool of your hardest
+   * past questions, served as a shuffle-bag (the whole deck before any
+   * repeat, never the same question twice in a row). Nothing generated. */
   function makeTargetQuestion(cfg, model, prev) {
     const enabled = op => cfg.ops[['add', 'sub', 'mul', 'div'][op]];
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const q = pickTargetQuestion(cfg, model, enabled);
-      if (!prev || q.x !== prev.x || q.y !== prev.y || q.op !== prev.op) return q;
+    const avail = model.pool.filter(p => enabled(p[0]));
+    if (!avail.length) return makeQuestion(cfg); // ops filter emptied the deck
+    if (!model.bag || !model.bag.length) {
+      model.bag = avail.slice();
+      for (let i = model.bag.length - 1; i > 0; i--) { // Fisher–Yates
+        const j = randInt(0, i);
+        [model.bag[i], model.bag[j]] = [model.bag[j], model.bag[i]];
+      }
     }
-    return makeQuestion(cfg); // couldn't avoid a repeat — plain random
-  }
-
-  function pickTargetQuestion(cfg, model, enabled) {
-    const replays = model.replays.filter(r => enabled(r[0]));
-    if (replays.length >= 8 && Math.random() < 0.5) {
-      const [op, x, y] = replays[randInt(0, replays.length - 1)];
-      const answer = op === OP.add ? x + y : op === OP.sub ? x - y : op === OP.mul ? x * y : x / y;
-      return { op, x, y, answer };
+    let pick = model.bag.pop();
+    if (prev && pick[0] === prev.op && pick[1] === prev.x && pick[2] === prev.y && model.bag.length) {
+      const swap = model.bag.pop();
+      model.bag.push(pick);
+      pick = swap;
     }
-    const cands = model.archetypes.filter(a =>
-      enabled(a.op) &&
-      (a.spec.sf === undefined || (a.spec.sf >= cfg.mulA[0] && a.spec.sf <= cfg.mulA[1])));
-    if (!cands.length) return makeQuestion(cfg);
-    let r = Math.random() * cands.reduce((s, a) => s + a.weight, 0);
-    let arch = cands[cands.length - 1];
-    for (const a of cands) { r -= a.weight; if (r <= 0) { arch = a; break; } }
-
-    for (let i = 0; i < 40; i++) {
-      const q = genForSpec(cfg, arch.spec, model);
-      if (q) return q;
-    }
-    return makeQuestion(cfg);
+    const [op, x, y] = pick;
+    const answer = op === OP.add ? x + y : op === OP.sub ? x - y : op === OP.mul ? x * y : x / y;
+    return { op, x, y, answer };
   }
 
   function genForSpec(cfg, spec, model) {

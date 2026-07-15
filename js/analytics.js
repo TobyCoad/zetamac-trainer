@@ -323,62 +323,28 @@
       <div class="note">Grouped by structure (times table, operand size, carry/borrow). Ratio compares each group's median time to your overall median for that operation, so slow ops don't drown out patterns within fast ops. Groups need ≥6 samples.</div></div>`;
   }
 
-  /* ---- weakness model for targeted-practice mode ----
-   * Built from ALL history (ignores the stats filters). Returns null when
-   * there isn't enough data (<40 questions). */
+  /* ---- targeted-mode pool: purely historical questions ----
+   * The 50 hardest questions you've actually faced, judged by time taken
+   * relative to your median for that operation. Each unique question is
+   * judged by its MOST RECENT attempt, so answering one fast drops it out
+   * of the pool and the next-hardest takes its place — a rolling worst-50.
+   * Returns null when there isn't enough data. */
   function buildTargetModel() {
-    const qs = Store.loadSessions().flatMap(s => s.qs);
+    const qs = Store.loadSessions().flatMap(s => s.qs); // chronological
     if (qs.length < 40) return null;
     const opMed = [0, 1, 2, 3].map(op => median(qs.filter(q => q[0] === op).map(q => q[3])) || 1);
 
-    const groups = new Map();
+    const latest = new Map(); // unique question -> its most recent showing
     for (const q of qs) {
-      const [op, x, y] = q;
-      let key, spec;
-      if (op === 0) { const f = addFeatures(x, y); key = `a${f.size}${f.carry}`; spec = { kind: 'add', size: f.size, carry: f.carry }; }
-      else if (op === 1) { const f = subFeatures(x, y); key = `s${f.size}${f.carry}`; spec = { kind: 'sub', size: f.size, carry: f.carry }; }
-      else if (op === 2) { key = `m${mulSmall(q)}`; spec = { kind: 'mul', sf: mulSmall(q) }; }
-      else { key = `d${mulSmall(q)}`; spec = { kind: 'div', sf: mulSmall(q) }; }
-      if (!groups.has(key)) groups.set(key, { op, spec, times: [], errs: 0 });
-      const g = groups.get(key);
-      g.times.push(q[3]);
-      g.errs += q[4] > 0 ? 1 : 0;
+      latest.set(`${q[0]},${q[1]},${q[2]}`, [q[0], q[1], q[2], q[3] / opMed[q[0]]]);
     }
+    const pool = [...latest.values()]
+      .filter(p => p[3] >= 1.1) // only genuinely slower-than-your-norm
+      .sort((a, b) => b[3] - a[3])
+      .slice(0, 50);
+    if (pool.length < 10) return null;
 
-    let archetypes = [];
-    for (const g of groups.values()) {
-      if (g.times.length < 6) continue;
-      const ratio = median(g.times) / opMed[g.op];
-      const errRate = g.errs / g.times.length;
-      const weight = 0.03 + Math.pow(Math.max(0.05, ratio - 0.75), 2) * (1 + 2 * errRate);
-      archetypes.push({ op: g.op, spec: g.spec, weight, ratio, errRate });
-    }
-    // NARROW: only genuinely weak archetypes make the cut — top 6 that are
-    // measurably slow (≥8% over your op median) or error-prone; sampling is
-    // sharpened (weight²) so the worst of those dominate the session
-    archetypes.sort((a, b) => b.weight - a.weight);
-    let weak = archetypes.filter(a => a.ratio >= 1.08 || a.errRate >= 0.15).slice(0, 6);
-    if (weak.length < 3) weak = archetypes.slice(0, 3); // early days: just the worst 3
-    weak = weak.map(a => Object.assign({}, a, { weight: a.weight * a.weight }));
-
-    // literal replays ranked by how badly each went (slowness + wrong
-    // entries), worst 80 only — not just anything moderately slow
-    const cand = new Map();
-    for (const q of qs) {
-      if (q[4] === 0 && q[3] < 1.4 * opMed[q[0]]) continue;
-      const k = `${q[0]},${q[1]},${q[2]}`;
-      const score = q[3] / opMed[q[0]] + (q[4] > 0 ? 1.5 : 0);
-      const prev = cand.get(k);
-      if (!prev || score > prev.score) cand.set(k, { q: [q[0], q[1], q[2]], score });
-    }
-    const replays = [...cand.values()]
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 80)
-      .map(c => c.q);
-
-    return weak.length
-      ? { archetypes: weak, replays, nQs: qs.length, addF: addFeatures, subF: subFeatures }
-      : null;
+    return { pool, nQs: qs.length, addF: addFeatures, subF: subFeatures };
   }
 
   /* ---- helpers for drill mode's live adaptation ---- */
