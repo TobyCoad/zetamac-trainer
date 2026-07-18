@@ -5,7 +5,7 @@
   let settings = Store.loadSettings();
 
   /* Bump APP_VERSION together with version.json and the sw.js cache name. */
-  const APP_VERSION = 14;
+  const APP_VERSION = 15;
   window.APP_VERSION = APP_VERSION;
 
   function showScreen(name) {

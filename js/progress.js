@@ -48,6 +48,7 @@
     body.innerHTML =
       heroCards(sprints, days, g) +
       goalsSection(sprints, g) +
+      improvementSection(sprints, days, g) +
       calendarSection(days, g) +
       dailyChartSection(sprints, days) +
       `<div class="stat-section"><div class="note">Only fully-completed 120s sprints count here — ended-early sessions and other modes don't. That's deliberate: assessments are 2 minutes, start to finish.</div></div>`;
@@ -116,6 +117,65 @@
         <label>Target score <input type="number" id="goal-score" min="10" max="150" value="${g.score}"></label>
       </div>
       <div class="note">The consistency floor (80% of target) is the assessment-day metric: firms see one attempt, not your best of fifteen. Raise the target as the goals turn green.</div>
+    </div>`;
+  }
+
+  /* ---- rate of improvement + projected days to goal ----
+   * Linear trend over the last 14 training days on CALENDAR-day spacing
+   * (rest days count against the rate), projected forward to the target. */
+  function improvementSection(sprints, days, g) {
+    const seen = new Set();
+    const daily = [];
+    for (const s of sprints) {
+      const k = dayKey(s.ts);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      const rec = days.get(k);
+      const d = new Date(s.ts);
+      daily.push({ dayNum: Math.floor(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() / 86400e3), avg: rec.total / rec.count });
+    }
+    if (daily.length < 5) {
+      return `<div class="stat-section"><h3>Rate of improvement</h3>
+        <div class="note">Needs 5+ training days to fit a trend — you have ${daily.length}. Keep showing up.</div></div>`;
+    }
+    const recent = daily.slice(-14);
+    const x0 = recent[0].dayNum;
+    const xs = recent.map(p => p.dayNum - x0);
+    const ys = recent.map(p => p.avg);
+    const n = recent.length;
+    const mx = xs.reduce((a, b) => a + b, 0) / n;
+    const my = ys.reduce((a, b) => a + b, 0) / n;
+    let num = 0, den = 0;
+    for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) ** 2; }
+    const slope = den > 0 ? num / den : 0; // points per calendar day
+    const now = new Date();
+    const todayNum = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 86400e3);
+    const current = my + slope * (todayNum - x0 - mx); // trend level today
+
+    let etaVal, etaSub;
+    if (current >= g.score) {
+      etaVal = '🎯 there';
+      etaSub = `trend level ≥ ${g.score} — raise the target`;
+    } else if (slope < 0.05) {
+      etaVal = '—';
+      etaSub = 'no upward trend over the window';
+    } else {
+      const daysLeft = Math.ceil((g.score - current) / slope);
+      if (daysLeft > 365) { etaVal = '>1 yr'; etaSub = 'at the current rate'; }
+      else {
+        const eta = new Date(Date.now() + daysLeft * 86400e3);
+        etaVal = `~${daysLeft}d`;
+        etaSub = `on track for ${g.score} around ${eta.getDate()}/${eta.getMonth() + 1}`;
+      }
+    }
+    const slopeTxt = `${slope >= 0 ? '+' : ''}${slope.toFixed(2)}`;
+    return `<div class="stat-section"><h3>Rate of improvement</h3>
+      <div class="cards-row" style="margin-bottom:0">
+        <div class="stat-card"><b class="${slope >= 0.05 ? 'trend-up' : slope <= -0.05 ? 'trend-down' : ''}">${slopeTxt}</b><small>points / day (${n}-day trend)</small></div>
+        <div class="stat-card"><b>${current.toFixed(1)}</b><small>trend level today (goal ${g.score})</small></div>
+        <div class="stat-card wide2"><b>${etaVal}</b><small>${etaSub}</small></div>
+      </div>
+      <div class="note">Fitted to your daily averages over the last ${n} training days, spaced by calendar day — skipped days slow the measured rate. The projection assumes the current rate holds; it usually flattens as scores rise, so treat it as a floor, not a promise.</div>
     </div>`;
   }
 

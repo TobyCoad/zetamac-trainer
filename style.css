@@ -403,6 +403,10 @@ input[type="number"] {
 .today-right { text-align: right; }
 .today-right b { font-size: 26px; }
 
+.stat-card.wide2 { grid-column: span 2; }
+.trend-up { color: var(--accent2); }
+.trend-down { color: var(--red); }
+
 .goal-bar { height: 8px; background: var(--surface2); border-radius: 4px; overflow: hidden; }
 .goal-bar > div { height: 100%; background: var(--accent2); border-radius: 4px; transition: width 0.3s; }
 .goal-bar.big { height: 12px; border-radius: 6px; }
