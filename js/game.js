@@ -2,8 +2,8 @@
  * value equals the answer (no submit). Subtraction/division are inverses of
  * addition/multiplication so answers are always small non-negative integers. */
 (function () {
-  const OP = { add: 0, sub: 1, mul: 2, div: 3 };
-  const OP_SYM = ['+', '−', '×', '÷'];
+  const OP = { add: 0, sub: 1, mul: 2, div: 3, frac: 4 };
+  const OP_SYM = ['+', '−', '×', '÷', '⅟'];
 
   const EIGHTY_TARGET = 80;
   const EIGHTY_DUR = 480;
@@ -40,11 +40,28 @@
     return { op, x, y, answer };
   }
 
+  /* Fractions mode: 1/n as a decimal, rounded to 3 places. The answer box
+   * shows a fixed "0." prefix and you type just the three digits — so the
+   * expected answer is a zero-padded digit STRING ("071" for 1/14). */
+  function fracDigits(n) {
+    return String(Math.round(1000 / n)).padStart(3, '0');
+  }
+
+  function makeFracQuestion(cfg, prev) {
+    for (let i = 0; i < 5; i++) {
+      const n = randInt(cfg.frac[0], cfg.frac[1]);
+      if (!prev || n !== prev.y || cfg.frac[0] === cfg.frac[1]) {
+        return { op: OP.frac, x: 1, y: n, answer: fracDigits(n) };
+      }
+    }
+    return { op: OP.frac, x: 1, y: cfg.frac[0], answer: fracDigits(cfg.frac[0]) };
+  }
+
   /* Targeted mode: PURELY historical questions — the pool of your hardest
    * past questions, served as a shuffle-bag (the whole deck before any
    * repeat, never the same question twice in a row). Nothing generated. */
   function makeTargetQuestion(cfg, model, prev) {
-    const enabled = op => cfg.ops[['add', 'sub', 'mul', 'div'][op]];
+    const enabled = op => op === OP.frac ? true : cfg.ops[['add', 'sub', 'mul', 'div'][op]];
     const avail = model.pool.filter(p => enabled(p[0]));
     if (!avail.length) return makeQuestion(cfg); // ops filter emptied the deck
     if (!model.bag || !model.bag.length) {
@@ -61,7 +78,8 @@
       pick = swap;
     }
     const [op, x, y] = pick;
-    const answer = op === OP.add ? x + y : op === OP.sub ? x - y : op === OP.mul ? x * y : x / y;
+    const answer = op === OP.add ? x + y : op === OP.sub ? x - y : op === OP.mul ? x * y
+      : op === OP.div ? x / y : fracDigits(y);
     return { op, x, y, answer };
   }
 
@@ -78,6 +96,10 @@
       const f = model.subF(x, y);
       return f.carry === spec.carry && f.size === spec.size
         ? { op: OP.sub, x, y, answer: b } : null;
+    }
+    if (spec.kind === 'frac') {
+      const n = randInt(spec.lo, spec.hi);
+      return { op: OP.frac, x: 1, y: n, answer: fracDigits(n) };
     }
     const sf = spec.sf, b = randInt(cfg.mulB[0], cfg.mulB[1]);
     if (spec.kind === 'mul') return { op: OP.mul, x: sf, y: b, answer: sf * b };
@@ -120,7 +142,10 @@
     const { op, x, y } = q, cfg = state.cfg;
     for (let i = 0; i < 30; i++) {
       let nq;
-      if (op === 2) {
+      if (op === 4) { // nearby denominator: 1/14 begets 1/13, 1/17, ...
+        const n = clampR(y + randInt(-4, 4), cfg.frac || [2, 50]);
+        nq = { op, x: 1, y: n, answer: fracDigits(n) };
+      } else if (op === 2) {
         const sf = Math.min(x, y);
         const b = clampR(Math.max(x, y) + randInt(-8, 8), cfg.mulB);
         nq = { op, x: sf, y: b, answer: sf * b };
@@ -177,7 +202,7 @@
     const cfg = mode === 'eighty'
       ? {
           ops: { add: true, sub: true, mul: true, div: true },
-          addA: [2, 100], addB: [2, 100], mulA: [2, 12], mulB: [2, 100],
+          addA: [2, 100], addB: [2, 100], mulA: [2, 12], mulB: [2, 100], frac: [2, 50],
         }
       : {
           ops: Object.assign({}, settings.ops),
@@ -185,7 +210,10 @@
           addB: normRange(settings.addB, [2, 100]),
           mulA: normRange(settings.mulA, [2, 12]),
           mulB: normRange(settings.mulB, [2, 100]),
+          frac: normRange(settings.frac || [2, 50], [2, 50]),
         };
+    cfg.frac[0] = Math.max(2, cfg.frac[0]); // 1/1 has no leading "0."
+    cfg.frac[1] = Math.max(cfg.frac[0], cfg.frac[1]);
     if (!Object.values(cfg.ops).some(Boolean)) cfg.ops.add = true;
 
     const dur = mode === 'eighty' ? EIGHTY_DUR : mode === 'drill' ? Infinity : settings.dur;
@@ -195,7 +223,7 @@
       drill: mode === 'drill' ? {
         pending: [],              // scheduled probes: {cd, q} served when cd hits 0
         live: new Map(),          // archetype key -> {w (EWMA badness), op, spec}
-        opTimes: [[], [], [], []],
+        opTimes: [[], [], [], [], []],
         opBase: Analytics.opMedians(), // historical ms baselines, or null
       } : null,
       pausedTotal: 0,
@@ -260,7 +288,9 @@
   }
 
   function nextQuestion() {
-    state.q = state.drill
+    state.q = state.mode === 'frac'
+      ? makeFracQuestion(state.cfg, state.q)
+      : state.drill
       ? nextDrillQuestion()
       : state.model
       ? makeTargetQuestion(state.cfg, state.model, state.q)
@@ -278,12 +308,14 @@
     const q = state.q;
     // only touch the question node when the question actually changes —
     // redundant writes dirty layout and slow the next tap's processing
-    const qText = `${q.x} ${OP_SYM[q.op]} ${q.y} =`;
+    const qText = q.op === OP.frac ? `1/${q.y} =` : `${q.x} ${OP_SYM[q.op]} ${q.y} =`;
     if (qText !== lastQuestionText) {
       lastQuestionText = qText;
       el('question').textContent = qText;
     }
     const box = el('answer-box');
+    // fractions carry a fixed "0." prefix — you type only the 3 digits
+    if (q.op === OP.frac) { box.textContent = '0.' + state.input; return; }
     box.textContent = state.input || ' ';
     // no wrong-input styling: the box gives zero feedback on whether the
     // digits typed so far are correct (wasWrong is still tracked for stats)
@@ -416,14 +448,15 @@
       s.mode === 'eighty'
         ? (hitTarget ? `finished with ${fmtTime(Math.round(EIGHTY_DUR - elapsedS))} to spare` : `of ${EIGHTY_TARGET} target`)
         : s.mode === 'drill' ? `${fmtTime(s.dur)} of freeform practice`
+        : s.mode === 'frac' ? `${s.dur}s fractions`
         : `${s.dur}s sprint`;
 
-    const perOp = [0, 1, 2, 3].map(op => s.qs.filter(q => q[0] === op).length);
+    const perOp = [0, 1, 2, 3, 4].map(op => s.qs.filter(q => q[0] === op).length);
     el('results-grid').innerHTML = `
       <div class="rcell"><b>${pace.toFixed(1)}</b><small>answers / min</small></div>
       <div class="rcell"><b>${(med / 1000).toFixed(2)}s</b><small>median per question</small></div>
       <div class="rcell"><b>${errs}</b><small>wrong entries</small></div>
-      <div class="rcell"><b>${perOp.map((c, i) => `${OP_SYM[i]}${c}`).join(' ')}</b><small>mix</small></div>`;
+      <div class="rcell"><b>${perOp.map((c, i) => c ? `${OP_SYM[i]}${c}` : '').filter(Boolean).join(' ') || '–'}</b><small>mix</small></div>`;
 
     renderQuestionLog(s);
     App.showScreen('results');
@@ -434,7 +467,7 @@
   function renderQuestionLog(s) {
     const box = el('results-qs');
     if (!s.qs.length) { box.innerHTML = ''; return; }
-    const opMedRun = [0, 1, 2, 3].map(op => {
+    const opMedRun = [0, 1, 2, 3, 4].map(op => {
       const t = s.qs.filter(q => q[0] === op).map(q => q[3]);
       return t.length >= 3 ? median(t) : null;
     });
@@ -442,9 +475,10 @@
     const rows = s.qs.map(q => {
       const [op, x, y, ms, err] = q;
       const color = Charts.ratioColor(ms / (opMedRun[op] || runMed));
-      const ans = op === 0 ? x + y : op === 1 ? x - y : op === 2 ? x * y : x / y;
+      const ans = op === 0 ? x + y : op === 1 ? x - y : op === 2 ? x * y : op === 3 ? x / y : `0.${fracDigits(y)}`;
+      const qTxt = op === 4 ? `1/${y} = ${ans}` : `${x} ${OP_SYM[op]} ${y} = ${ans}`;
       return `<div class="rq" style="border-left-color:${color}">
-        <span class="rq-q">${x} ${OP_SYM[op]} ${y} = ${ans}</span>
+        <span class="rq-q">${qTxt}</span>
         ${err > 0 ? '<span class="rq-err">✗</span>' : ''}
         <span class="rq-t" style="color:${color}">${(ms / 1000).toFixed(1)}s</span>
       </div>`;

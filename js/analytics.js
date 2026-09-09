@@ -1,10 +1,10 @@
 /* Analytics — computes and renders the Stats tab from stored sessions.
  * Question tuple: [op, x, y, ms, err] with operands AS PRESENTED
- * (op: 0=add 1=sub 2=mul 3=div; sub is x−y, div is x÷y). */
+ * (op: 0=add 1=sub 2=mul 3=div 4=1/y as 3dp decimal; sub is x−y, div is x÷y). */
 (function () {
-  const OP_NAME = ['Addition', 'Subtraction', 'Multiplication', 'Division'];
-  const OP_SYM = ['+', '−', '×', '÷'];
-  const OP_COLOR = ['#5b8cff', '#b48bff', '#34d0a6', '#ffb454'];
+  const OP_NAME = ['Addition', 'Subtraction', 'Multiplication', 'Division', 'Reciprocals'];
+  const OP_SYM = ['+', '−', '×', '÷', '⅟'];
+  const OP_COLOR = ['#5b8cff', '#b48bff', '#34d0a6', '#ffb454', '#ff8ab0'];
 
   let filters = { mode: 'all', window: 'all' };
 
@@ -148,7 +148,7 @@
       if (!bestKey) return '';
       const [m, d] = bestKey[0].split('|');
       group = cands.filter(s => s.mode === m && s.dur === Number(d));
-      label = `${m === 'target' ? 'targeted ' : ''}${d}s sprint`;
+      label = `${m === 'target' ? 'targeted ' : m === 'frac' ? 'fractions ' : ''}${d}s ${m === 'frac' ? 'rounds' : 'sprint'}`;
     }
     if (group.length < 2) return '';
 
@@ -172,7 +172,7 @@
   /* ---- per-operation speed + accuracy ---- */
   function opSpeedSection(ss, qs) {
     const items = [];
-    for (let op = 0; op < 4; op++) {
+    for (let op = 0; op < 5; op++) {
       const g = qs.filter(r => r.q[0] === op);
       if (!g.length) continue;
       const med = median(g.map(r => r.q[3]));
@@ -189,7 +189,7 @@
     // trend: median s/q per op per session (last 20 sessions with data)
     const recent = ss.slice(-20);
     const series = [];
-    for (let op = 0; op < 4; op++) {
+    for (let op = 0; op < 5; op++) {
       const pts = [];
       recent.forEach((s, i) => {
         const t = s.qs.filter(q => q[0] === op).map(q => q[3]);
@@ -266,6 +266,13 @@
   }
 
   /* ---- weak / strong archetypes ---- */
+  function fracBucket(n) {
+    return n <= 10 ? { key: '2–10', lo: 2, hi: 10 }
+      : n <= 20 ? { key: '11–20', lo: 11, hi: 20 }
+      : n <= 35 ? { key: '21–35', lo: 21, hi: 35 }
+      : { key: '36–50', lo: 36, hi: 50 };
+  }
+
   function archetypeKey(q) {
     const [op, x, y] = q;
     if (op === 0) {
@@ -277,7 +284,8 @@
       return `− ${f.size}${f.carry ? ' w/ borrow' : ''}`;
     }
     if (op === 2) return `× ${mulSmall(q)}s`;
-    return `÷ by ${mulSmall(q)}`;
+    if (op === 3) return `÷ by ${mulSmall(q)}`;
+    return `1/${fracBucket(y).key}`;
   }
 
   function weakSpotsSection(qs) {
@@ -286,7 +294,7 @@
         <div class="note">Need ~40+ questions to spot patterns — you have ${qs.length}. Keep playing.</div></div>`;
     }
     // baseline median per op
-    const opMed = [0, 1, 2, 3].map(op => median(qs.filter(r => r.q[0] === op).map(r => r.q[3])) || 1);
+    const opMed = [0, 1, 2, 3, 4].map(op => median(qs.filter(r => r.q[0] === op).map(r => r.q[3])) || 1);
     const groups = new Map();
     for (const r of qs) {
       const k = archetypeKey(r.q);
@@ -332,7 +340,7 @@
   function buildTargetModel() {
     const qs = Store.loadSessions().flatMap(s => s.qs); // chronological
     if (qs.length < 40) return null;
-    const opMed = [0, 1, 2, 3].map(op => median(qs.filter(q => q[0] === op).map(q => q[3])) || 1);
+    const opMed = [0, 1, 2, 3, 4].map(op => median(qs.filter(q => q[0] === op).map(q => q[3])) || 1);
 
     const latest = new Map(); // unique question -> its most recent showing
     for (const q of qs) {
@@ -351,12 +359,13 @@
   function opMedians() {
     const qs = Store.loadSessions().flatMap(s => s.qs);
     if (qs.length < 40) return null;
-    return [0, 1, 2, 3].map(op => median(qs.filter(q => q[0] === op).map(q => q[3])) || 2800);
+    return [0, 1, 2, 3, 4].map(op => median(qs.filter(q => q[0] === op).map(q => q[3])) || 2800);
   }
 
   function qSpec(op, x, y) {
     if (op === 0) { const f = addFeatures(x, y); return { key: `a${f.size}${f.carry}`, spec: { kind: 'add', size: f.size, carry: f.carry } }; }
     if (op === 1) { const f = subFeatures(x, y); return { key: `s${f.size}${f.carry}`, spec: { kind: 'sub', size: f.size, carry: f.carry } }; }
+    if (op === 4) { const b = fracBucket(y); return { key: `f${b.key}`, spec: { kind: 'frac', lo: b.lo, hi: b.hi } }; }
     const sf = mulSmall([op, x, y]);
     return op === 2
       ? { key: `m${sf}`, spec: { kind: 'mul', sf } }
@@ -364,7 +373,7 @@
   }
 
   function opForKey(k) {
-    return k[0] === '+' ? 0 : k[0] === '−' ? 1 : k[0] === '×' ? 2 : 3;
+    return k[0] === '+' ? 0 : k[0] === '−' ? 1 : k[0] === '×' ? 2 : k[0] === '1' ? 4 : 3;
   }
 
   /* ---- recent sessions table ---- */
@@ -380,6 +389,8 @@
         ? `<span class="mode-tag target">target ${s.dur}s</span>`
         : s.mode === 'drill'
         ? `<span class="mode-tag drill">drill ${s.dur >= 90 ? Math.round(s.dur / 60) + 'm' : s.dur + 's'}</span>`
+        : s.mode === 'frac'
+        ? `<span class="mode-tag frac">1/n ${s.dur}s</span>`
         : `<span class="mode-tag">${s.dur}s</span>`;
       const score = s.mode === 'eighty' && s.hitTargetMs
         ? `80 ✓ ${(s.hitTargetMs / 60000).toFixed(1)}m`

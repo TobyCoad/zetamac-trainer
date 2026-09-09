@@ -5,7 +5,7 @@
   let settings = Store.loadSettings();
 
   /* Bump APP_VERSION together with version.json and the sw.js cache name. */
-  const APP_VERSION = 15;
+  const APP_VERSION = 16;
   window.APP_VERSION = APP_VERSION;
 
   function showScreen(name) {
@@ -80,6 +80,11 @@
     el('drill-best').textContent = drills.length
       ? `${Math.round(drills.reduce((a, s) => a + s.dur, 0) / 60)} min drilled total`
       : '';
+
+    const fracs = ss.filter(s => s.mode === 'frac' && s.dur === settings.dur);
+    el('frac-best').textContent = fracs.length
+      ? `best ${Math.max(...fracs.map(s => s.score))} at ${settings.dur}s`
+      : '';
   }
 
   /* ---- settings UI ---- */
@@ -97,6 +102,7 @@
   const RANGE_IDS = {
     addA0: ['addA', 0], addA1: ['addA', 1], addB0: ['addB', 0], addB1: ['addB', 1],
     mulA0: ['mulA', 0], mulA1: ['mulA', 1], mulB0: ['mulB', 0], mulB1: ['mulB', 1],
+    frac0: ['frac', 0], frac1: ['frac', 1],
   };
 
   function wireSettings() {
@@ -139,6 +145,7 @@
     el('btn-start-target').addEventListener('click', () => startTarget());
     el('btn-start-drill').addEventListener('click', () =>
       Game.start('drill', settings, Analytics.buildTargetModel())); // model optional — drill adapts live
+    el('btn-start-frac').addEventListener('click', () => Game.start('frac', settings));
 
     // quit button = pause menu (resume / save / discard), never an instant kill
     el('btn-quit').addEventListener('click', () => {
@@ -282,6 +289,7 @@
       const last = Store.loadSessions().slice(-1)[0];
       if (last && last.mode === 'target') startTarget();
       else if (last && last.mode === 'drill') Game.start('drill', settings, Analytics.buildTargetModel());
+      else if (last && last.mode === 'frac') Game.start('frac', settings);
       else Game.start(last && last.mode === 'eighty' ? 'eighty' : 'sprint', settings);
     });
     el('btn-results-stats').addEventListener('click', () => showScreen('stats'));

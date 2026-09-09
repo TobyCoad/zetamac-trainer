@@ -14,6 +14,7 @@
     ops: { add: true, sub: true, mul: true, div: true },
     addA: [2, 100], addB: [2, 100],
     mulA: [2, 12], mulB: [2, 100],
+    frac: [2, 50],
     goals: { daily: 15, score: 50 },
   };
 

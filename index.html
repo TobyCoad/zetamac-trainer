@@ -49,6 +49,12 @@
       </button>
     </section>
 
+    <button class="mode-card fracmode wide" id="btn-start-frac">
+      <span class="mode-title">Fractions &rarr; decimals</span>
+      <span class="mode-desc">1/n to 3 decimal places &mdash; the box shows &ldquo;0.&rdquo;, you type the three digits (1/14 &rarr; 071). Uses the sprint duration; range below.</span>
+      <span class="mode-best" id="frac-best"></span>
+    </button>
+
     <section class="settings-panel">
       <h2>Sprint settings</h2>
       <div class="setting-row">
@@ -82,6 +88,12 @@
         <div class="range-inputs">
           <span>(</span><input type="number" id="mulA0" min="0" max="999"> <span>to</span> <input type="number" id="mulA1" min="0" max="999"><span>)&nbsp;&times;&nbsp;(</span>
           <input type="number" id="mulB0" min="0" max="999"> <span>to</span> <input type="number" id="mulB1" min="0" max="999"><span>)</span>
+        </div>
+      </div>
+      <div class="setting-row ranges">
+        <label>Fraction denominators <span class="hint">(1/n as a decimal, 3 dp)</span></label>
+        <div class="range-inputs">
+          <span>1/(</span><input type="number" id="frac0" min="2" max="999"> <span>to</span> <input type="number" id="frac1" min="2" max="999"><span>)</span>
         </div>
       </div>
       <button class="text-btn" id="btn-reset-defaults">Reset to zetamac defaults</button>
@@ -153,6 +165,7 @@
           <button data-m="eighty">80 in 8</button>
           <button data-m="target">Targeted</button>
           <button data-m="drill">Drill</button>
+          <button data-m="frac">1/n</button>
         </div>
         <div class="seg small" id="seg-stat-window">
           <button data-w="all" class="on">All time</button>
